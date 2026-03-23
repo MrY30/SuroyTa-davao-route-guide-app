@@ -435,7 +435,6 @@ class _MapScreenState extends State<MapScreen> {
     drawMapElements();
   }
   
-  // 9stpeterclass@gmail.com
   // --- UPGRADED LOGIC: Dual-Input Search (Nominatim + Coordinates) ---
   Future<void> searchLocation(String query) async {
     if (query.isEmpty) return;
@@ -489,7 +488,7 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'User-Agent': 'SakayTaApp/1.0 (9stpeterclass@gmail.com)'},
+        headers: {'User-Agent': 'SakayTaApp/1.0 (${dotenv.env['EMAIL_NOMINATIM']})'},
       );
 
       if (response.statusCode == 200) {
