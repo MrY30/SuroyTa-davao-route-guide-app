@@ -389,7 +389,7 @@ class _MapScreenState extends State<MapScreen> {
       color: routeColor,
     );
   }
-  
+  // testing
   // --- NEW LOGIC: Hardware GPS ---
   Future<void> getUserCurrentLocation() async {
     bool serviceEnabled;
