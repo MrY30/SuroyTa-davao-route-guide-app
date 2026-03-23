@@ -13,6 +13,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'models/favorite_location.dart';
 import 'hive_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:open_route_service/open_route_service.dart';
 
 // NOT SO FINAL COLORS
 const Color primaryColor = Color(0xFF42c585);
@@ -291,28 +292,92 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
   // --- NEW LOGIC: Talk to OSRM API ---
-  Future<Map<String, dynamic>?> fetchWalkingRouteFromOSRM(LatLng start, LatLng end) async {
-    // OSRM expects coordinates in Longitude,Latitude format
-    final url = 'https://router.project-osrm.org/route/v1/foot/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson';
+  // Future<Map<String, dynamic>?> fetchWalkingRouteFromOSRM(LatLng start, LatLng end) async {
+  //   // OSRM expects coordinates in Longitude,Latitude format
+  //   final url = 'https://router.project-osrm.org/route/v1/foot/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson';
     
+  //   try {
+  //     final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+  //     if (response.statusCode == 200) {
+  //       final data = json.decode(response.body);
+  //       final coords = data['routes'][0]['geometry']['coordinates'] as List;
+  //       final distance = data['routes'][0]['distance'] as num;
+        
+  //       // Convert GeoJSON [lon, lat] back to FlutterMap LatLng
+  //       List<LatLng> path = coords.map((c) => LatLng(c[1], c[0])).toList();
+        
+  //       return {
+  //         'path': path,
+  //         'distance': distance.toDouble(),
+  //       };
+  //     }
+  //   } catch (e) {
+  //     debugPrint("OSRM Request Failed: $e");
+  //   }
+  //   return null;
+  // }
+
+  Future<Map<String, dynamic>?> fetchWalkingRouteFromORS(LatLng start, LatLng end) async {
+    // 1. Establish our baseline straight-line distance
+    final Distance haversine = const Distance(); // Or Distance() 
+    // final double straightLineDist = haversine.as(LengthUnit.Meter, start, end);
+
+    // 2. Initialize the OpenRouteService client
+    // Replace with your actual API key!
+    final OpenRouteService client = OpenRouteService(apiKey: '${dotenv.env['ORS_API_KEY']}');
+
     try {
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final coords = data['routes'][0]['geometry']['coordinates'] as List;
-        final distance = data['routes'][0]['distance'] as num;
+      // 3. Use the correct package method: directionsRouteCoordsGet
+      final List<ORSCoordinate> routeCoordinates = await client.directionsRouteCoordsGet(
+        startCoordinate: ORSCoordinate(latitude: start.latitude, longitude: start.longitude),
+        endCoordinate: ORSCoordinate(latitude: end.latitude, longitude: end.longitude),
+        profileOverride: ORSProfile.footWalking,
+      );
+
+      // 4. Check if we got a valid route back
+      if (routeCoordinates.isNotEmpty) {
         
-        // Convert GeoJSON [lon, lat] back to FlutterMap LatLng
-        List<LatLng> path = coords.map((c) => LatLng(c[1], c[0])).toList();
+        // Convert the package's ORSCoordinates to FlutterMap LatLngs
+        List<LatLng> path = routeCoordinates
+            .map((coord) => LatLng(coord.latitude, coord.longitude))
+            .toList();
+
+        // 5. Calculate the total walking distance ourselves!
+        // We just loop through the path and add up the length of each little segment.
+        double orsDistance = 0.0;
+        for (int i = 0; i < path.length - 1; i++) {
+          orsDistance += haversine.as(LengthUnit.Meter, path[i], path[i + 1]);
+        }
         
+        // 6. THE SANITY CHECK
+        /* // Commented out for your raw testing
+        if (orsDistance > (straightLineDist * 3) && straightLineDist < 500) {
+          debugPrint("ORS returned a massive detour. Falling back to straight line.");
+          return {
+            'path': [start, end],
+            'distance': straightLineDist,
+          };
+        }
+        */
+
         return {
           'path': path,
-          'distance': distance.toDouble(),
+          'distance': orsDistance,
         };
+      } else {
+        debugPrint("ORS Package returned an empty route.");
       }
+
     } catch (e) {
-      debugPrint("OSRM Request Failed: $e");
+      // If the emulator blocks the connection, the error prints here
+      debugPrint("ORS Package Error: $e");
     }
+
+    // 7. THE FALLBACK
+    // return {
+    //   'path': [start, end],
+    //   'distance': straightLineDist,
+    // };
     return null;
   }
 
@@ -671,18 +736,23 @@ class _MapScreenState extends State<MapScreen> {
         final endWalkPoints = selectedRoute!.actualWalkPathEnd ?? [points[selectedRoute!.alightIndex], destinationPin!];
 
         // Walk to Jeepney
-        maplibreController?.addLine(maplibre.LineOptions(
-          geometry: startWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-          lineColor: '#000000', // Black
-          lineWidth: 3.0,
-        ));
+        if(selectedRoute!.actualWalkPathStart != null){
+          maplibreController?.addLine(maplibre.LineOptions(
+            geometry: startWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
+            lineColor: '#000000', // Black
+            lineWidth: 3.0,
+          ));
+        }
+        
 
         // Walk to Destination
-        maplibreController?.addLine(maplibre.LineOptions(
-          geometry: endWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-          lineColor: '#000000',
-          lineWidth: 3.0,
-        ));
+        if(selectedRoute!.actualWalkPathEnd != null){
+          maplibreController?.addLine(maplibre.LineOptions(
+            geometry: endWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
+            lineColor: '#000000',
+            lineWidth: 3.0,
+          ));
+        }
       }
     }
   }
@@ -882,8 +952,9 @@ class _MapScreenState extends State<MapScreen> {
                   final boardPoint = routeData.polylineData!.points[result.boardIndex];
                   final alightPoint = routeData.polylineData!.points[result.alightIndex];
 
-                  final startLeg = await fetchWalkingRouteFromOSRM(startPin!, boardPoint);
-                  final endLeg = await fetchWalkingRouteFromOSRM(alightPoint, destinationPin!);
+                  // switched to ORS from OSRM
+                  final startLeg = await fetchWalkingRouteFromORS(startPin!, boardPoint);
+                  final endLeg = await fetchWalkingRouteFromORS(alightPoint, destinationPin!);
 
                   if (startLeg != null && endLeg != null) {
                     setState(() {

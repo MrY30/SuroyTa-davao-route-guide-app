@@ -46,6 +46,7 @@ dependencies:
   hive_flutter: ^1.1.0
   path_provider: ^2.1.5
   fluttertoast: ^9.0.0
+  open_route_service: ^1.2.7
 
 dev_dependencies:
   flutter_test:
