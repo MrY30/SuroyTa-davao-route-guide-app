@@ -125,91 +125,118 @@ List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
   final LatLng dest = data['dest'];
   final Map<String, List<LatLng>> allRouteCoordinates = data['routes'];
 
-  final Distance haversine = Distance();
+  final Distance haversine = const Distance();
   List<RouteResult> validRoutes = [];
 
+  // ==========================================
+  // THE COST FUNCTION DIALS
+  // Tweak these to change how "lazy" the algorithm is!
+  // ==========================================
+  const double walkMultiplier = 15.0; // 1m of walking adds 15 penalty points
+  const double rideMultiplier = 1.0;  // 1m of riding adds 1 penalty point
+  const double minRideDistance = 200.0; // Ignore rides shorter than 200m
+
   allRouteCoordinates.forEach((routeName, coordinates) {
-    double minStartDist = double.infinity;
-    int startIdx = -1;
-    
-    double minDestDist = double.infinity;
-    int destIdx = -1;
+    if (coordinates.isEmpty) return; 
 
-    // Nearest Neighbor Search
+    // 1. PRE-CALCULATE: Cumulative Distances (Speeds up the math massively)
+    List<double> cumulativeDistances = [0.0];
+    double totalRouteDistance = 0.0;
+    for (int i = 0; i < coordinates.length - 1; i++) {
+      totalRouteDistance += haversine.as(LengthUnit.Meter, coordinates[i], coordinates[i+1]);
+      cumulativeDistances.add(totalRouteDistance);
+    }
+
+    // 2. FIND CANDIDATES: Gather all points within 400m
+    List<int> candidateStarts = [];
+    List<int> candidateDests = [];
+
     for (int i = 0; i < coordinates.length; i++) {
-      final point = coordinates[i];
-      final distToStart = haversine.as(LengthUnit.Meter, start, point);
-      final distToDest = haversine.as(LengthUnit.Meter, dest, point);
-
-      if (distToStart < minStartDist) {
-        minStartDist = distToStart;
-        startIdx = i;
+      if (haversine.as(LengthUnit.Meter, start, coordinates[i]) <= 400) {
+        candidateStarts.add(i);
       }
-      if (distToDest < minDestDist) {
-        minDestDist = distToDest;
-        destIdx = i;
+      if (haversine.as(LengthUnit.Meter, dest, coordinates[i]) <= 400) {
+        candidateDests.add(i);
       }
     }
 
-    // Logic Check: <= 400m walking per leg AND right direction
-    if (minStartDist <= 400 && minDestDist <= 400 && startIdx != destIdx) {
+    if (candidateStarts.isEmpty || candidateDests.isEmpty) return; 
 
-      double ridingDistanceMeters = 0.0;
+    // 3. PAIRING: Calculate the Penalty Score for every possible combination
+    int bestStartIdx = -1;
+    int bestDestIdx = -1;
+    double lowestPenaltyScore = double.infinity;
+    
+    // Store the exact distances of the winning pair
+    double finalRideDistance = 0.0; 
+    double bestStartWalk = 0.0;
+    double bestDestWalk = 0.0;
 
-      // NORMAL DIRECTION
-      if (startIdx < destIdx) {
-        for (int i = startIdx; i < destIdx; i++) {
-          ridingDistanceMeters += haversine.as(
-            LengthUnit.Meter,
-            coordinates[i],
-            coordinates[i+1],
-          );
-        }
-      } 
+    for (int sIdx in candidateStarts) {
+      for (int dIdx in candidateDests) {
+        if (sIdx == dIdx) continue;
 
-      else {
-        // start -> end of array
-        for (int i = startIdx; i < coordinates.length - 1; i++) {
-          ridingDistanceMeters += haversine.as(
-            LengthUnit.Meter,
-            coordinates[i],
-            coordinates[i+1],
-          );
+        // Calculate Ride Distance
+        double rideDist = 0.0;
+        if (sIdx < dIdx) {
+          rideDist = cumulativeDistances[dIdx] - cumulativeDistances[sIdx];
+        } else { // It's a loop!
+          rideDist = (totalRouteDistance - cumulativeDistances[sIdx]) + cumulativeDistances[dIdx];
         }
 
-        // start of array -> destination
-        for (int i = 0; i < destIdx; i++) {
-          ridingDistanceMeters += haversine.as(
-            LengthUnit.Meter,
-            coordinates[i],
-            coordinates[i+1],
-          );
+        // Filter out ridiculous 1-block jeepney rides
+        if (rideDist < minRideDistance) continue; 
+
+        // Calculate Walk Distances
+        double sWalk = haversine.as(LengthUnit.Meter, start, coordinates[sIdx]);
+        double dWalk = haversine.as(LengthUnit.Meter, dest, coordinates[dIdx]);
+        double totalWalk = sWalk + dWalk;
+
+        // --- THE COST FUNCTION ---
+        // Calculate the total "pain" of this specific route combination
+        double penaltyScore = (totalWalk * walkMultiplier) + (rideDist * rideMultiplier);
+
+        // Does this pair have the lowest penalty? Make it the new winner!
+        if (penaltyScore < lowestPenaltyScore) {
+          lowestPenaltyScore = penaltyScore;
+          bestStartIdx = sIdx;
+          bestDestIdx = dIdx;
+          finalRideDistance = rideDist;
+          bestStartWalk = sWalk;
+          bestDestWalk = dWalk;
         }
       }
+    }
 
-      double ridingDistanceKm = ridingDistanceMeters / 1000.0;
+    // 4. RESULT: If a valid route passed all tests, build it!
+    if (bestStartIdx != -1 && bestDestIdx != -1) {
+      double ridingDistanceKm = finalRideDistance / 1000.0;
 
-      double fare = 13.0;
+      // Base fare logic
+      double fare = 13.0; 
       if (ridingDistanceKm > 4.0) {
-        fare += (ridingDistanceKm - 4.0) * 1.80;
+        fare += (ridingDistanceKm - 4.0) * 1.80; 
       }
 
       validRoutes.add(
         RouteResult(
           routeName: routeName,
-          estimatedStartWalk: minStartDist,
-          estimatedEndWalk: minDestDist,
-          boardIndex: startIdx,
-          alightIndex: destIdx,
+          estimatedStartWalk: bestStartWalk,
+          estimatedEndWalk: bestDestWalk,
+          boardIndex: bestStartIdx,
+          alightIndex: bestDestIdx,
           ridingDistanceKm: ridingDistanceKm,
           estimatedFare: fare,
+          // You might need to add this property to your RouteResult class if you want to sort by it:
+          // totalEstimatedWalk: bestStartWalk + bestDestWalk, 
         ),
       );
     }
   });
 
-  // Sort by the total combined walking distance so the easiest route is on top
-  validRoutes.sort((a, b) => a.totalEstimatedWalk.compareTo(b.totalEstimatedWalk));
+  // 5. GLOBAL SORTING: Keep the easiest walk at the top of the UI
+  // Make sure your RouteResult class has a getter for totalEstimatedWalk!
+  validRoutes.sort((a, b) => (a.estimatedStartWalk + a.estimatedEndWalk).compareTo(b.estimatedStartWalk + b.estimatedEndWalk));
   
   return validRoutes;
 }
@@ -425,6 +452,7 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       startPin = userLatLng;
       enableGPS = true;
+      _clearRoutingData();
     });
     maplibreController?.animateCamera(
       maplibre.CameraUpdate.newLatLngZoom(
@@ -451,6 +479,7 @@ class _MapScreenState extends State<MapScreen> {
 
       setState((){
         destinationPin = searchResult;
+        _clearRoutingData();
         _currentDestinationName = '';
       });
       
@@ -501,6 +530,7 @@ class _MapScreenState extends State<MapScreen> {
 
           setState((){
             destinationPin = searchResult;
+            _clearRoutingData();
             _currentDestinationName = displayName;
           });
         
@@ -531,6 +561,21 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // --- NEW LOGIC: Centralized Data Invalidation ---
+  // Call this ANY TIME the startPin or destinationPin changes or is removed.
+  void _clearRoutingData() {
+    suggestedRoutes.clear();
+    selectedRoute = null;
+    
+    // Also clear any manual toggles to ensure the map is pristine
+    for (var route in allRoutes) {
+      route.isVisible = false;
+    }
+    
+    // Note: We don't call setState or drawMapElements() here because 
+    // we will call this method *inside* the existing setState blocks of your triggers.
+  }
+
   // --- NEW LOGIC: MapLibre Imperative Drawing ---
   void drawMapElements() async {
     // 1. Clear the canvas of old lines and pins
@@ -552,7 +597,7 @@ class _MapScreenState extends State<MapScreen> {
           geometry: route.polylineData!.points.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
           lineColor: hexColor,
           lineWidth: 4.0,
-          lineOpacity: 0.6, // Slightly transparent so it doesn't clutter the map
+          lineOpacity: 1, // Slightly transparent so it doesn't clutter the map
         ));
       }
     }else{
@@ -580,6 +625,21 @@ class _MapScreenState extends State<MapScreen> {
           iconAnchor: 'bottom',
         ));
       }
+
+      // 🔍 DEBUG: Only selected route points
+      // if (selectedRoute != null) {
+      //   final routeData = allRoutes.firstWhere((r) => r.name == selectedRoute!.routeName);
+
+      //   for (var point in routeData.polylineData!.points) {
+      //     maplibreController?.addCircle(
+      //       maplibre.CircleOptions(
+      //         geometry: maplibre.LatLng(point.latitude, point.longitude),
+      //         circleRadius: 3.0,
+      //         circleColor: "#0000FF", // blue
+      //       ),
+      //     );
+      //   }
+      // }
 
       // 3. Draw the Selected Route
       if (selectedRoute != null && startPin != null && destinationPin != null) {
@@ -776,9 +836,13 @@ class _MapScreenState extends State<MapScreen> {
       return [
         const Text(
           'Suggested Routes',
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: fontColor),
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor),
         ),
-        const SizedBox(height: 15),
+        const SizedBox(height: 10),
+        const Text(
+          'Pick the jeep you wish to ride and it will give you the walking distance, and estimated fare.',
+          style: TextStyle(color: fontColor),
+        ),
         ...suggestedRoutes.map((result) {
 
           final startWalkText = result.actualStartWalk != null 
@@ -1258,10 +1322,12 @@ class _MapScreenState extends State<MapScreen> {
                 if (currentPinMode == PinMode.start) {
                   startPin = standardCoords;
                   currentPinMode = PinMode.none;
+                  _clearRoutingData();
                 } else if (currentPinMode == PinMode.destination) {
                   destinationPin = standardCoords;
                   _currentDestinationName = '';
                   currentPinMode = PinMode.none;
+                  _clearRoutingData();
                 }
                 // (We will add the code to physically draw the pins here in the next step)
                 drawMapElements();
@@ -1476,6 +1542,7 @@ class _MapScreenState extends State<MapScreen> {
                                     startPin = null;
                                     enableGPS = false; // Wiping the pin wipes GPS tracking
                                     currentPinMode = PinMode.none;
+                                    _clearRoutingData();
                                   } else if (currentPinMode == PinMode.start) {
                                     // Action 2: Cancel selection
                                     currentPinMode = PinMode.none;
@@ -1499,6 +1566,7 @@ class _MapScreenState extends State<MapScreen> {
                                   if (destinationPin != null) {
                                     destinationPin = null;
                                     currentPinMode = PinMode.none;
+                                    _clearRoutingData();
                                   } else if (currentPinMode == PinMode.destination) {
                                     currentPinMode = PinMode.none;
                                   } else {
