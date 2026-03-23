@@ -1200,6 +1200,22 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {}); 
   }
 
+  // --- NEW LOGIC: Check if current pin is a Favorite ---
+  FavoriteLocation? _getCurrentFavorite() {
+    if (destinationPin == null) return null;
+    
+    final favorites = _hiveService.getFavorites();
+    
+    for (var fav in favorites) {
+      // Compare coordinates up to 4 decimal places to avoid micro-precision bugs
+      if (fav.latitude.toStringAsFixed(4) == destinationPin!.latitude.toStringAsFixed(4) &&
+          fav.longitude.toStringAsFixed(4) == destinationPin!.longitude.toStringAsFixed(4)) {
+        return fav; // Found a match!
+      }
+    }
+    return null; // No match found
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1300,7 +1316,110 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
           ),
+ 
+          // --- NEW LAYER: The Dynamic Route Legend ---
+          Positioned(
+            top: 110, // Aligned perfectly with the Star button on the right
+            left: 16,
+            // The BoxConstraints prevent the legend from stretching too wide and covering the whole screen
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: Builder(
+                builder: (context) {
+                  // 1. Filter out only the routes the user has actively checked
+                  final visibleRoutes = allRoutes.where((r) => r.isVisible).toList();
+                  
+                  // 2. Determine if the legend should be shown
+                  final bool showLegend = _selectedIndex == 0 && visibleRoutes.isNotEmpty;
 
+                  return AnimatedOpacity(
+                    opacity: showLegend ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: IgnorePointer(
+                      ignoring: !showLegend, // Don't block map touches if it's invisible
+                      // AnimatedSize makes the card smoothly grow/shrink as items are added/removed
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: Container(
+                          padding: const EdgeInsets.all(12.0),
+                          decoration: BoxDecoration(
+                            color: btnColor.withOpacity(0.8), // Slight transparency looks premium on maps
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min, 
+                            children: [
+                              const Text(
+                                'Legend',
+                                style: TextStyle(
+                                  fontSize: 12, 
+                                  fontWeight: FontWeight.bold, 
+                                  color: fontColor,
+                                  letterSpacing: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              
+                              // --- NEW: THE SCROLLABLE CAP ---
+                              ConstrainedBox(
+                                // Set the maximum height. 200.0 is roughly 6-7 routes before scrolling starts.
+                                constraints: const BoxConstraints(maxHeight: 75.0), 
+                                child: SingleChildScrollView(
+                                  // This inner column holds the actual route items
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: visibleRoutes.map((route) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 6.0),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            // The Route Color Indicator
+                                            Container(
+                                              width: 16,
+                                              height: 4,
+                                              decoration: BoxDecoration(
+                                                color: route.color,
+                                                borderRadius: BorderRadius.circular(2),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            // The Route Name
+                                            Expanded(
+                                              child: Text(
+                                                route.name,
+                                                style: const TextStyle(
+                                                  fontSize: 10, 
+                                                  color: fontColor,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(), // .toList() is added back here for the inner Column
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+              ),
+            ),
+          ),
+          
           // Dynamic Floating Buttons (Start & Target Pins on the Left, GPS & Find on the Right)
           AnimatedBuilder(
             animation: sheetController,
@@ -1486,54 +1605,77 @@ class _MapScreenState extends State<MapScreen> {
               scale: (destinationPin != null && !_isSavePopupVisible && _selectedIndex != 0) ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutBack,
-              child: GestureDetector(
-                onTap: (){
-                  setState(() {
-                    // Pre-fill the text field. If empty, keep it empty so the hint text shows.
-                    _saveNameController.text = _currentDestinationName;
-                    _isSavePopupVisible = true; // Trigger the drop-down animation!
-                  });
-                },
-                child: Container(
-                  height: 40,
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: btnColor.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(13),
-                    boxShadow: [
-                      BoxShadow(
-                        color: btnColor.withOpacity(0.3),
-                        offset: Offset(0, 20),
-                        blurRadius: 20
-                      )
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20), 
-                    child:Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                            destinationPin != null 
-                            ? '${destinationPin!.latitude.toStringAsFixed(4)}, ${destinationPin!.longitude.toStringAsFixed(4)}'
-                            : '',
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: fontColor,
-                              shadows: [
-                                Shadow(
-                                  offset: Offset(1, 4),
-                                  blurRadius: 7,
-                                  color: Colors.black.withOpacity(0.5)
-                                )
-                              ]
+              child: Builder(
+                builder: (context){
+                  FavoriteLocation? currentFav = _getCurrentFavorite();
+                  bool isSaved = currentFav != null;
+
+                  return GestureDetector(
+                    onTap: () async{
+                      if(isSaved){
+                        await _hiveService.deleteLocation(currentFav.id);
+                        setState(() {});
+                        if(context.mounted){
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Removed from Favorites'))
+                          );
+                        }
+                      } else{
+                        setState(() {
+                          // Pre-fill the text field. If empty, keep it empty so the hint text shows.
+                          _saveNameController.text = _currentDestinationName;
+                          _isSavePopupVisible = true; // Trigger the drop-down animation!
+                        });
+                      }
+                    },
+                    child: Container(
+                      height: 40,
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: btnColor.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(13),
+                        boxShadow: [
+                          BoxShadow(
+                            color: btnColor.withOpacity(0.3),
+                            offset: Offset(0, 20),
+                            blurRadius: 20
+                          )
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20), 
+                        child:Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                isSaved
+                                  ? currentFav.name
+                                  : (destinationPin != null 
+                                      ? '${destinationPin!.latitude.toStringAsFixed(4)}, ${destinationPin!.longitude.toStringAsFixed(4)}'
+                                      : ''),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color: fontColor,
+                                  shadows: [
+                                    Shadow(
+                                      offset: Offset(1, 4),
+                                      blurRadius: 7,
+                                      color: Colors.black.withOpacity(0.5)
+                                    )
+                                  ]
+                                ),
+                              ),
                             ),
-                          ),
-                        const Icon(Icons.star, color: Colors.white),
-                      ],
-                    )
-                  )
-                ),
+                            Icon(isSaved ? Icons.star : Icons.star_border, color: isSaved ? Colors.amber : Colors.white),
+                          ],
+                        )
+                      )
+                    ),
+                  );
+                }
               )
             ),
           ),
