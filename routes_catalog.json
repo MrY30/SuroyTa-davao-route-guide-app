@@ -1,0 +1,210 @@
+[
+  {
+    "name": "Bago Aplaya",
+    "file": "assets/routes/dvo_bago_aplaya.geojson"
+  },
+  {
+    "name": "Bangkal",
+    "file": "assets/routes/dvo_bangkal.geojson"
+  },
+  {
+    "name": "Buhangin via Dacudao",
+    "file": "assets/routes/dvo_buhangin_dacudao.geojson"
+  },
+  {
+    "name": "Buhangin via JP Laurel",
+    "file": "assets/routes/dvo_buhangin_jp_laurel.geojson"
+  },
+  {
+    "name": "Bunawan via Buhangin",
+    "file": "assets/routes/dvo_bunawan_buhangin.geojson"
+  },
+  {
+    "name": "Bunawan via Sasa",
+    "file": "assets/routes/dvo_bunawan_sasa.geojson"
+  },
+  {
+    "name": "Calinan",
+    "file": "assets/routes/dvo_calinan.geojson"
+  },
+  {
+    "name": "Catalunan Grande",
+    "file": "assets/routes/dvo_catalunan_grande.geojson"
+  },
+  {
+    "name": "Catitipan via JP Laurel",
+    "file": "assets/routes/dvo_catitipan_jp_laurel.geojson"
+  },
+  {
+    "name": "Ecoland",
+    "file": "assets/routes/dvo_ecoland.geojson"
+  },
+  {
+    "name": "El Rio",
+    "file": "assets/routes/dvo_el_rio.geojson"
+  },
+  {
+    "name": "Emily Homes",
+    "file": "assets/routes/dvo_emily_homes.geojson"
+  },
+  {
+    "name": "Jade Valley",
+    "file": "assets/routes/dvo_jade_valley.geojson"
+  },
+  {
+    "name": "Lasang via Buhangin",
+    "file": "assets/routes/dvo_lasang_buhangin.geojson"
+  },
+  {
+    "name": "Lasang via Sasa",
+    "file": "assets/routes/dvo_lasang_sasa.geojson"
+  },
+  {
+    "name": "Maa - Agdao",
+    "file": "assets/routes/dvo_maa_agdao.geojson"
+  },
+  {
+    "name": "Maa - Bankerohan",
+    "file": "assets/routes/dvo_maa_bankerohan.geojson"
+  },
+  {
+    "name": "Magtuod",
+    "file": "assets/routes/dvo_magtuod.geojson"
+  },
+  {
+    "name": "Matina",
+    "file": "assets/routes/dvo_matina.geojson"
+  },
+  {
+    "name": "Matina Aplaya",
+    "file": "assets/routes/dvo_matina_aplaya.geojson"
+  },
+  {
+    "name": "Matina Crossing",
+    "file": "assets/routes/dvo_matina_crossing.geojson"
+  },
+  {
+    "name": "Matina Pangi",
+    "file": "assets/routes/dvo_matina_pangi.geojson"
+  },
+  {
+    "name": "Mintal",
+    "file": "assets/routes/dvo_mintal.geojson"
+  },
+  {
+    "name": "Obrero",
+    "file": "assets/routes/dvo_obrero.geojson"
+  },
+  {
+    "name": "Panacan - SM City Davao",
+    "file": "assets/routes/dvo_panacan_sm.geojson"
+  },
+  {
+    "name": "Panacan via Cabaguio",
+    "file": "assets/routes/dvo_panacan_cabaguio.geojson"
+  },
+  {
+    "name": "Puan",
+    "file": "assets/routes/dvo_puan.geojson"
+  },
+  {
+    "name": "Route 1",
+    "file": "assets/routes/dvo_route_1.geojson"
+  },
+  {
+    "name": "Route 10",
+    "file": "assets/routes/dvo_route_10.geojson"
+  },
+  {
+    "name": "Route 11",
+    "file": "assets/routes/dvo_route_11.geojson"
+  },
+  {
+    "name": "Route 12",
+    "file": "assets/routes/dvo_route_12.geojson"
+  },
+  {
+    "name": "Route 13",
+    "file": "assets/routes/dvo_route_13.geojson"
+  },
+  {
+    "name": "Route 14",
+    "file": "assets/routes/dvo_route_14.geojson"
+  },
+  {
+    "name": "Route 15",
+    "file": "assets/routes/dvo_route_15.geojson"
+  },
+  {
+    "name": "Route 2",
+    "file": "assets/routes/dvo_route_2.geojson"
+  },
+  {
+    "name": "Route 3",
+    "file": "assets/routes/dvo_route_3.geojson"
+  },
+  {
+    "name": "Route 4",
+    "file": "assets/routes/dvo_route_4.geojson"
+  },
+  {
+    "name": "Route 5",
+    "file": "assets/routes/dvo_route_5.geojson"
+  },
+  {
+    "name": "Route 6",
+    "file": "assets/routes/dvo_route_6.geojson"
+  },
+  {
+    "name": "Route 7",
+    "file": "assets/routes/dvo_route_7.geojson"
+  },
+  {
+    "name": "Route 8",
+    "file": "assets/routes/dvo_route_8.geojson"
+  },
+  {
+    "name": "Route 9",
+    "file": "assets/routes/dvo_route_9.geojson"
+  },
+  {
+    "name": "Sasa via Cabaguio",
+    "file": "assets/routes/dvo_sasa_cabaguio.geojson"
+  },
+  {
+    "name": "Sasa via JP Laurel",
+    "file": "assets/routes/dvo_sasa_jp_laurel.geojson"
+  },
+  {
+    "name": "Sasa via R. Castillo",
+    "file": "assets/routes/dvo_sasa_r_castillo.geojson"
+  },
+  {
+    "name": "Talomo",
+    "file": "assets/routes/dvo_talomo.geojson"
+  },
+  {
+    "name": "Tibungco via Buhangin",
+    "file": "assets/routes/dvo_tibungco_buhangin.geojson"
+  },
+  {
+    "name": "Tibungco via Cabaguio",
+    "file": "assets/routes/dvo_tibungco_cabaguio.geojson"
+  },
+  {
+    "name": "Tibungco via R. Castillo",
+    "file": "assets/routes/dvo_tibungco_r_castillo.geojson"
+  },
+  {
+    "name": "Toril",
+    "file": "assets/routes/dvo_toril.geojson"
+  },
+  {
+    "name": "Ulas",
+    "file": "assets/routes/dvo_ulas.geojson"
+  },
+  {
+    "name": "Wa-an",
+    "file": "assets/routes/dvo_waan.geojson"
+  }
+]
