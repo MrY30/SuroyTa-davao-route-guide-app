@@ -763,19 +763,19 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       // 🔍 DEBUG: Only selected route points
-      if (selectedRoute != null) {
-        final routeData = allRoutes.firstWhere((r) => r.name == selectedRoute!.routeName);
+      // if (selectedRoute != null) {
+      //   final routeData = allRoutes.firstWhere((r) => r.name == selectedRoute!.routeName);
 
-        for (var point in routeData.polylineData!.points) {
-          maplibreController?.addCircle(
-            maplibre.CircleOptions(
-              geometry: maplibre.LatLng(point.latitude, point.longitude),
-              circleRadius: 3.0,
-              circleColor: "#0000FF", // blue
-            ),
-          );
-        }
-      }
+      //   for (var point in routeData.polylineData!.points) {
+      //     maplibreController?.addCircle(
+      //       maplibre.CircleOptions(
+      //         geometry: maplibre.LatLng(point.latitude, point.longitude),
+      //         circleRadius: 3.0,
+      //         circleColor: "#0000FF", // blue
+      //       ),
+      //     );
+      //   }
+      // }
 
       // 3. Draw the Selected Route
       if (selectedRoute != null && startPin != null && destinationPin != null) {
@@ -869,18 +869,32 @@ class _MapScreenState extends State<MapScreen> {
             child: ListTile(
               leading: const Icon(Icons.directions_bus, color: Colors.purple),
               title: Text(result.routeName, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(
-                'Walk to Jeep: $startWalkText | Jeep to Dest: $endWalkText\n'
-                'Ride: $rideDistanceText | Est. Fare: $fareText'
-              ),
               trailing: result.isFetchingActualRoute 
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () async {
-                setState(() {
-                  selectedRoute = result;
-                });
+                
+                // 1. ANIMATION: If the card is already showing, slide it UP first
+                if (_showFloatingCard) {
+                  setState(() { _showFloatingCard = false; });
+                  // Wait for it to slide up out of view before changing the data
+                  await Future.delayed(const Duration(milliseconds: 300)); 
+                }
+                
+                setState(() { selectedRoute = result;});
                 drawMapElements();
+
+                // 3. Slide the sheet DOWN to get it out of the way
+                if (sheetController.isAttached) {
+                  sheetController.animateTo(
+                    0.26, // Almost minimized, but leaves a grab handle visible
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                }
+                
+                // 4. ANIMATION: Slide the top card DOWN with the new data
+                setState(() { _showFloatingCard = true; });
 
                 // Fetch OSRM only if we haven't yet
                 if (result.actualStartWalk == null && startPin != null && destinationPin != null) {
@@ -906,12 +920,6 @@ class _MapScreenState extends State<MapScreen> {
                   
                   setState(() { result.isFetchingActualRoute = false; });
                 }
-
-                sheetController.animateTo(
-                  0.26,
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeInOut,
-                );
               },
             ),
           );
@@ -919,6 +927,103 @@ class _MapScreenState extends State<MapScreen> {
       )
     ];
   }
+  
+  Widget _buildFloatingRouteDetails() {
+    // If no route is selected, don't try to read its data
+    if (selectedRoute == null) return const SizedBox.shrink();
+
+    final startWalkText = selectedRoute!.actualStartWalk != null 
+        ? '${selectedRoute!.actualStartWalk!.toStringAsFixed(0)}m'
+        : '~${selectedRoute!.estimatedStartWalk.toStringAsFixed(0)}m';
+        
+    final endWalkText = selectedRoute!.actualEndWalk != null 
+        ? '${selectedRoute!.actualEndWalk!.toStringAsFixed(0)}m'
+        : '~${selectedRoute!.estimatedEndWalk.toStringAsFixed(0)}m';
+
+    final fareText = 'Php ${selectedRoute!.estimatedFare.toStringAsFixed(2)}';
+    final rideDistanceText = '${selectedRoute!.ridingDistanceKm.toStringAsFixed(1)} km';
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutBack,
+      // If true, it sits at 60px (covering the header). If false, it hides off-screen at -150px.
+      top: _showFloatingCard ? 60.0 : -150.0, 
+      left: 0,
+      right: 0,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: btnColor, // Using your custom color
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              offset: const Offset(0, 10),
+              blurRadius: 20
+            )
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // Hugs the content
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Route Name & Close Button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    selectedRoute!.routeName,
+                    style: TextStyle(
+                      fontSize: 20, 
+                      fontWeight: FontWeight.bold, 
+                      color: primaryColor,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    // When the user dismisses the card
+                    setState(() { _showFloatingCard = false; });
+                    // Pop the sheet back up to show the list!
+                    if (sheetController.isAttached) {
+                      sheetController.animateTo(0.4, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                    }
+                  },
+                  child: Icon(Icons.close, color: fontColor),
+                )
+              ],
+            ),
+            const SizedBox(height: 10),
+            
+            // Bottom Row: Details
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Walk: $startWalkText + $endWalkText', style: TextStyle(color: fontColor, fontSize: 12)),
+                    Text('Ride: $rideDistanceText', style: TextStyle(color: fontColor, fontSize: 12)),
+                  ],
+                ),
+                Text(
+                  fareText,
+                  style: TextStyle(
+                    fontSize: 22, 
+                    fontWeight: FontWeight.bold, 
+                    color: fontColor
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
   // --- NEW LOGIC: A reusable button builder ---
   Widget _buildPinButton({
     required String label,
@@ -1490,57 +1595,7 @@ class _MapScreenState extends State<MapScreen> {
             minMaxZoomPreference: const maplibre.MinMaxZoomPreference(11.0, 22.0),
           ),
           
-          Positioned(
-            top: 110,
-            left: 0,
-            right: 0,
-            child: AnimatedScale(
-              scale: 1.0,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutBack,
-              child: Container(
-                    height: 65,
-                    margin: const EdgeInsets.symmetric(horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: btnColor,
-                      borderRadius: BorderRadius.circular(13),
-                      boxShadow: [
-                        BoxShadow(
-                          color: btnColor.withOpacity(0.3),
-                          offset: Offset(0, 20),
-                          blurRadius: 20
-                        )
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20), 
-                      child:Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Hello',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 20,
-                                color: fontColor,
-                                shadows: [
-                                  Shadow(
-                                    offset: Offset(1, 4),
-                                    blurRadius: 7,
-                                    color: Colors.black.withOpacity(0.5)
-                                  )
-                                ]
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
-                    )
-                  )
-            ),
-          ),
+          
           
           SafeArea(
             child: Padding(
@@ -2087,6 +2142,9 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
+        
+          _buildFloatingRouteDetails(),
+
         ],
       ),
       // Navigation Bar
