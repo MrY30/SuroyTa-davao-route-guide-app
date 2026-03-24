@@ -853,16 +853,16 @@ class _MapScreenState extends State<MapScreen> {
         ),
         ...suggestedRoutes.map((result) {
 
-          final startWalkText = result.actualStartWalk != null 
-              ? '${result.actualStartWalk!.toStringAsFixed(0)}m'
-              : '~${result.estimatedStartWalk.toStringAsFixed(0)}m';
+          // final startWalkText = result.actualStartWalk != null 
+          //     ? '${result.actualStartWalk!.toStringAsFixed(0)}m'
+          //     : '~${result.estimatedStartWalk.toStringAsFixed(0)}m';
               
-          final endWalkText = result.actualEndWalk != null 
-              ? '${result.actualEndWalk!.toStringAsFixed(0)}m'
-              : '~${result.estimatedEndWalk.toStringAsFixed(0)}m';
+          // final endWalkText = result.actualEndWalk != null 
+          //     ? '${result.actualEndWalk!.toStringAsFixed(0)}m'
+          //     : '~${result.estimatedEndWalk.toStringAsFixed(0)}m';
 
-          final fareText = 'Php ${result.estimatedFare.toStringAsFixed(2)}';
-          final rideDistanceText = '${result.ridingDistanceKm.toStringAsFixed(1)} km';
+          // final fareText = 'Php ${result.estimatedFare.toStringAsFixed(2)}';
+          // final rideDistanceText = '${result.ridingDistanceKm.toStringAsFixed(1)} km';
 
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 15.0),
