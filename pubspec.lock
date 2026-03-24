@@ -648,6 +648,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "9.3.0"
+  open_route_service:
+    dependency: "direct main"
+    description:
+      name: open_route_service
+      sha256: dfe963c374c8b2f42de25dd3721a717b33886a99c06dde5cc6f64e8c3dff95a4
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.7"
   package_config:
     dependency: transitive
     description:

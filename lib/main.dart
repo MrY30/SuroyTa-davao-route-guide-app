@@ -13,6 +13,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'models/favorite_location.dart';
 import 'hive_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+// import 'package:open_route_service/open_route_service.dart';
 
 // NOT SO FINAL COLORS
 const Color primaryColor = Color(0xFF42c585);
@@ -125,91 +126,118 @@ List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
   final LatLng dest = data['dest'];
   final Map<String, List<LatLng>> allRouteCoordinates = data['routes'];
 
-  final Distance haversine = Distance();
+  final Distance haversine = const Distance();
   List<RouteResult> validRoutes = [];
 
+  // ==========================================
+  // THE COST FUNCTION DIALS
+  // Tweak these to change how "lazy" the algorithm is!
+  // ==========================================
+  const double walkMultiplier = 15.0; // 1m of walking adds 15 penalty points
+  const double rideMultiplier = 1.0;  // 1m of riding adds 1 penalty point
+  const double minRideDistance = 200.0; // Ignore rides shorter than 200m
+
   allRouteCoordinates.forEach((routeName, coordinates) {
-    double minStartDist = double.infinity;
-    int startIdx = -1;
-    
-    double minDestDist = double.infinity;
-    int destIdx = -1;
+    if (coordinates.isEmpty) return; 
 
-    // Nearest Neighbor Search
+    // 1. PRE-CALCULATE: Cumulative Distances (Speeds up the math massively)
+    List<double> cumulativeDistances = [0.0];
+    double totalRouteDistance = 0.0;
+    for (int i = 0; i < coordinates.length - 1; i++) {
+      totalRouteDistance += haversine.as(LengthUnit.Meter, coordinates[i], coordinates[i+1]);
+      cumulativeDistances.add(totalRouteDistance);
+    }
+
+    // 2. FIND CANDIDATES: Gather all points within 400m
+    List<int> candidateStarts = [];
+    List<int> candidateDests = [];
+
     for (int i = 0; i < coordinates.length; i++) {
-      final point = coordinates[i];
-      final distToStart = haversine.as(LengthUnit.Meter, start, point);
-      final distToDest = haversine.as(LengthUnit.Meter, dest, point);
-
-      if (distToStart < minStartDist) {
-        minStartDist = distToStart;
-        startIdx = i;
+      if (haversine.as(LengthUnit.Meter, start, coordinates[i]) <= 400) {
+        candidateStarts.add(i);
       }
-      if (distToDest < minDestDist) {
-        minDestDist = distToDest;
-        destIdx = i;
+      if (haversine.as(LengthUnit.Meter, dest, coordinates[i]) <= 400) {
+        candidateDests.add(i);
       }
     }
 
-    // Logic Check: <= 400m walking per leg AND right direction
-    if (minStartDist <= 400 && minDestDist <= 400 && startIdx != destIdx) {
+    if (candidateStarts.isEmpty || candidateDests.isEmpty) return; 
 
-      double ridingDistanceMeters = 0.0;
+    // 3. PAIRING: Calculate the Penalty Score for every possible combination
+    int bestStartIdx = -1;
+    int bestDestIdx = -1;
+    double lowestPenaltyScore = double.infinity;
+    
+    // Store the exact distances of the winning pair
+    double finalRideDistance = 0.0; 
+    double bestStartWalk = 0.0;
+    double bestDestWalk = 0.0;
 
-      // NORMAL DIRECTION
-      if (startIdx < destIdx) {
-        for (int i = startIdx; i < destIdx; i++) {
-          ridingDistanceMeters += haversine.as(
-            LengthUnit.Meter,
-            coordinates[i],
-            coordinates[i+1],
-          );
-        }
-      } 
+    for (int sIdx in candidateStarts) {
+      for (int dIdx in candidateDests) {
+        if (sIdx == dIdx) continue;
 
-      else {
-        // start -> end of array
-        for (int i = startIdx; i < coordinates.length - 1; i++) {
-          ridingDistanceMeters += haversine.as(
-            LengthUnit.Meter,
-            coordinates[i],
-            coordinates[i+1],
-          );
+        // Calculate Ride Distance
+        double rideDist = 0.0;
+        if (sIdx < dIdx) {
+          rideDist = cumulativeDistances[dIdx] - cumulativeDistances[sIdx];
+        } else { // It's a loop!
+          rideDist = (totalRouteDistance - cumulativeDistances[sIdx]) + cumulativeDistances[dIdx];
         }
 
-        // start of array -> destination
-        for (int i = 0; i < destIdx; i++) {
-          ridingDistanceMeters += haversine.as(
-            LengthUnit.Meter,
-            coordinates[i],
-            coordinates[i+1],
-          );
+        // Filter out ridiculous 1-block jeepney rides
+        if (rideDist < minRideDistance) continue; 
+
+        // Calculate Walk Distances
+        double sWalk = haversine.as(LengthUnit.Meter, start, coordinates[sIdx]);
+        double dWalk = haversine.as(LengthUnit.Meter, dest, coordinates[dIdx]);
+        double totalWalk = sWalk + dWalk;
+
+        // --- THE COST FUNCTION ---
+        // Calculate the total "pain" of this specific route combination
+        double penaltyScore = (totalWalk * walkMultiplier) + (rideDist * rideMultiplier);
+
+        // Does this pair have the lowest penalty? Make it the new winner!
+        if (penaltyScore < lowestPenaltyScore) {
+          lowestPenaltyScore = penaltyScore;
+          bestStartIdx = sIdx;
+          bestDestIdx = dIdx;
+          finalRideDistance = rideDist;
+          bestStartWalk = sWalk;
+          bestDestWalk = dWalk;
         }
       }
+    }
 
-      double ridingDistanceKm = ridingDistanceMeters / 1000.0;
+    // 4. RESULT: If a valid route passed all tests, build it!
+    if (bestStartIdx != -1 && bestDestIdx != -1) {
+      double ridingDistanceKm = finalRideDistance / 1000.0;
 
-      double fare = 13.0;
+      // Base fare logic
+      double fare = 13.0; 
       if (ridingDistanceKm > 4.0) {
-        fare += (ridingDistanceKm - 4.0) * 1.80;
+        fare += (ridingDistanceKm - 4.0) * 1.80; 
       }
 
       validRoutes.add(
         RouteResult(
           routeName: routeName,
-          estimatedStartWalk: minStartDist,
-          estimatedEndWalk: minDestDist,
-          boardIndex: startIdx,
-          alightIndex: destIdx,
+          estimatedStartWalk: bestStartWalk,
+          estimatedEndWalk: bestDestWalk,
+          boardIndex: bestStartIdx,
+          alightIndex: bestDestIdx,
           ridingDistanceKm: ridingDistanceKm,
           estimatedFare: fare,
+          // You might need to add this property to your RouteResult class if you want to sort by it:
+          // totalEstimatedWalk: bestStartWalk + bestDestWalk, 
         ),
       );
     }
   });
 
-  // Sort by the total combined walking distance so the easiest route is on top
-  validRoutes.sort((a, b) => a.totalEstimatedWalk.compareTo(b.totalEstimatedWalk));
+  // 5. GLOBAL SORTING: Keep the easiest walk at the top of the UI
+  // Make sure your RouteResult class has a getter for totalEstimatedWalk!
+  validRoutes.sort((a, b) => (a.estimatedStartWalk + a.estimatedEndWalk).compareTo(b.estimatedStartWalk + b.estimatedEndWalk));
   
   return validRoutes;
 }
@@ -244,6 +272,7 @@ class _MapScreenState extends State<MapScreen> {
   maplibre.MapLibreMapController? maplibreController; // NEW: The native GPU controller
 
   int _selectedIndex = 1;
+  bool _showFloatingCard = false;
 
   @override
   void initState() {
@@ -263,31 +292,113 @@ class _MapScreenState extends State<MapScreen> {
     _saveNameController.dispose();
     super.dispose();
   }
-  // --- NEW LOGIC: Talk to OSRM API ---
+  // --- Fetching Walking Route using OSRM ---
   Future<Map<String, dynamic>?> fetchWalkingRouteFromOSRM(LatLng start, LatLng end) async {
-    // OSRM expects coordinates in Longitude,Latitude format
-    final url = 'https://router.project-osrm.org/route/v1/foot/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson';
+    // 1. Establish our baseline straight-line distance
+    final Distance haversine = const Distance(); // Or Distance() depending on your package version
+    final double straightLineDist = haversine.as(LengthUnit.Meter, start, end);
+
+    // 2. Add 'overview=full' to force smooth, highly-accurate road curves
+    final url = 'https://router.project-osrm.org/route/v1/foot/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&overview=full';
     
     try {
       final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final coords = data['routes'][0]['geometry']['coordinates'] as List;
-        final distance = data['routes'][0]['distance'] as num;
+        final osrmDistance = data['routes'][0]['distance'] as num;
         
+        // 3. THE SANITY CHECK: Protect against the "Missing Gate" trap
+        // If OSRM forces a massive detour (more than 3x the straight line), ignore it.
+        if (osrmDistance > (straightLineDist * 3) && straightLineDist < 500) {
+          debugPrint("OSRM returned a massive detour. Falling back to straight line.");
+          return {
+            'path': [start, end],
+            'distance': straightLineDist,
+          };
+        }
+
         // Convert GeoJSON [lon, lat] back to FlutterMap LatLng
         List<LatLng> path = coords.map((c) => LatLng(c[1], c[0])).toList();
         
         return {
           'path': path,
-          'distance': distance.toDouble(),
+          'distance': osrmDistance.toDouble(),
         };
       }
     } catch (e) {
-      debugPrint("OSRM Request Failed: $e");
+      debugPrint("OSRM Request Failed or Timed Out: $e");
     }
-    return null;
+    
+    // 4. THE FAILSAFE: If the API fails completely, don't break the UI!
+    // Just return a straight line so the user still sees a path.
+    return {
+      'path': [start, end],
+      'distance': straightLineDist,
+    };
   }
+
+  // --- Fetching Walking Route using ORS ---
+  // Future<Map<String, dynamic>?> fetchWalkingRouteFromORS(LatLng start, LatLng end) async {
+  //   // 1. Establish our baseline straight-line distance
+  //   final Distance haversine = const Distance();
+  //   final double straightLineDist = haversine.as(LengthUnit.Meter, start, end);
+
+  //   // 2. Initialize the OpenRouteService client
+  //   // Replace with your actual API key!
+  //   final OpenRouteService client = OpenRouteService(apiKey: '${dotenv.env['ORS_API_KEY']}');
+
+  //   try {
+  //     // 3. Use the correct package method: directionsRouteCoordsGet
+  //     final List<ORSCoordinate> routeCoordinates = await client.directionsRouteCoordsGet(
+  //       startCoordinate: ORSCoordinate(latitude: start.latitude, longitude: start.longitude),
+  //       endCoordinate: ORSCoordinate(latitude: end.latitude, longitude: end.longitude),
+  //       profileOverride: ORSProfile.footWalking,
+  //     ).timeout(const Duration(seconds: 5));
+
+  //     // 4. Check if we got a valid route back
+  //     if (routeCoordinates.isNotEmpty) {
+        
+  //       // Convert the package's ORSCoordinates to FlutterMap LatLngs
+  //       List<LatLng> path = routeCoordinates
+  //           .map((coord) => LatLng(coord.latitude, coord.longitude))
+  //           .toList();
+
+  //       // 5. Calculate the total walking distance ourselves!
+  //       // We just loop through the path and add up the length of each little segment.
+  //       double orsDistance = 0.0;
+  //       for (int i = 0; i < path.length - 1; i++) {
+  //         orsDistance += haversine.as(LengthUnit.Meter, path[i], path[i + 1]);
+  //       }
+        
+  //       // 6. THE SANITY CHECK
+  //       if (orsDistance > (straightLineDist * 3) && straightLineDist < 500) {
+  //         debugPrint("ORS returned a massive detour. Falling back to straight line.");
+  //         return {
+  //           'path': [start, end],
+  //           'distance': straightLineDist,
+  //         };
+  //       }
+
+  //       return {
+  //         'path': path,
+  //         'distance': orsDistance,
+  //       };
+  //     } else {
+  //       debugPrint("ORS Package returned an empty route.");
+  //     }
+
+  //   } catch (e) {
+  //     // If the emulator blocks the connection, the error prints here
+  //     debugPrint("ORS Package Error: $e");
+  //   }
+
+  //   // 7. THE FALLBACK
+  //   return {
+  //     'path': [start, end],
+  //     'distance': straightLineDist,
+  //   };
+  // }
 
   // 2. Logic: Loading the Catalog
   // --- UPDATED LOGIC: Loading Catalog with Colors ---
@@ -425,6 +536,7 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       startPin = userLatLng;
       enableGPS = true;
+      _clearRoutingData();
     });
     maplibreController?.animateCamera(
       maplibre.CameraUpdate.newLatLngZoom(
@@ -451,6 +563,7 @@ class _MapScreenState extends State<MapScreen> {
 
       setState((){
         destinationPin = searchResult;
+        _clearRoutingData();
         _currentDestinationName = '';
       });
       
@@ -501,6 +614,7 @@ class _MapScreenState extends State<MapScreen> {
 
           setState((){
             destinationPin = searchResult;
+            _clearRoutingData();
             _currentDestinationName = displayName;
           });
         
@@ -531,12 +645,79 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // --- NEW LOGIC: Centralized Data Invalidation ---
+  // Call this ANY TIME the startPin or destinationPin changes or is removed.
+  void _clearRoutingData() {
+    suggestedRoutes.clear();
+    selectedRoute = null;
+    
+    // Also clear any manual toggles to ensure the map is pristine
+    for (var route in allRoutes) {
+      route.isVisible = false;
+    }
+    
+    // Note: We don't call setState or drawMapElements() here because 
+    // we will call this method *inside* the existing setState blocks of your triggers.
+  }
+
+  Future<void> _updateDashedLine(String sourceId, String layerId, List<LatLng> points) async {
+    // 1. Strict formatting: Ensure it's a FeatureCollection. 
+    // If we have less than 2 points, pass an empty map to clear the line safely.
+    Map<String, dynamic> geoJson;
+    
+    if (points.length < 2) {
+      geoJson = {
+        "type": "FeatureCollection",
+        "features": []
+      };
+    } else {
+      geoJson = {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": points.map((p) => [p.longitude, p.latitude]).toList()
+            }
+          }
+        ]
+      };
+    }
+
+    try {
+      // 2. The Professional Way: Just update the data pipeline!
+      await maplibreController?.setGeoJsonSource(sourceId, geoJson);
+    } catch (e) {
+      // 3. If it fails, the source doesn't exist yet. Create it once.
+      await maplibreController?.addSource(sourceId, maplibre.GeojsonSourceProperties(data: geoJson));
+      await maplibreController?.addLineLayer(
+        sourceId, 
+        layerId, 
+        maplibre.LineLayerProperties(
+          lineColor: '#184A46',
+          lineWidth: 5.0,
+          lineDasharray: [2.0, 2.0], 
+        )
+      );
+    }
+  }
+
   // --- NEW LOGIC: MapLibre Imperative Drawing ---
   void drawMapElements() async {
     // 1. Clear the canvas of old lines and pins
     await maplibreController?.clearLines();
     await maplibreController?.clearCircles();
     await maplibreController?.clearSymbols();
+
+
+    // 2. Clear custom Sources and Layers (for our dashed lines)
+    // We wrap this in a try-catch because it will throw an error on the very first 
+    // run if the layers don't exist yet, which is totally fine!
+    // 2. SAFELY CLEAR the dashed lines (sends an empty array)
+    await _updateDashedLine('start-walk-source', 'start-walk-layer', []);
+    await _updateDashedLine('end-walk-source', 'end-walk-layer', []);
+
 
     // --- CONTEXTUAL RENDERING GATEKEEPER ---
     if (_selectedIndex == 0) {
@@ -552,7 +733,7 @@ class _MapScreenState extends State<MapScreen> {
           geometry: route.polylineData!.points.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
           lineColor: hexColor,
           lineWidth: 4.0,
-          lineOpacity: 0.6, // Slightly transparent so it doesn't clutter the map
+          lineOpacity: 1, // Slightly transparent so it doesn't clutter the map
         ));
       }
     }else{
@@ -580,6 +761,21 @@ class _MapScreenState extends State<MapScreen> {
           iconAnchor: 'bottom',
         ));
       }
+
+      // 🔍 DEBUG: Only selected route points
+      // if (selectedRoute != null) {
+      //   final routeData = allRoutes.firstWhere((r) => r.name == selectedRoute!.routeName);
+
+      //   for (var point in routeData.polylineData!.points) {
+      //     maplibreController?.addCircle(
+      //       maplibre.CircleOptions(
+      //         geometry: maplibre.LatLng(point.latitude, point.longitude),
+      //         circleRadius: 3.0,
+      //         circleColor: "#0000FF", // blue
+      //       ),
+      //     );
+      //   }
+      // }
 
       // 3. Draw the Selected Route
       if (selectedRoute != null && startPin != null && destinationPin != null) {
@@ -610,19 +806,23 @@ class _MapScreenState extends State<MapScreen> {
         final startWalkPoints = selectedRoute!.actualWalkPathStart ?? [startPin!, points[selectedRoute!.boardIndex]];
         final endWalkPoints = selectedRoute!.actualWalkPathEnd ?? [points[selectedRoute!.alightIndex], destinationPin!];
 
+        await _updateDashedLine('start-walk-source', 'start-walk-layer', startWalkPoints);
+        await _updateDashedLine('end-walk-source', 'end-walk-layer', endWalkPoints);
+        
         // Walk to Jeepney
-        maplibreController?.addLine(maplibre.LineOptions(
-          geometry: startWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-          lineColor: '#000000', // Black
-          lineWidth: 3.0,
-        ));
+        // maplibreController?.addLine(maplibre.LineOptions(
+        //   geometry: startWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
+        //   lineColor: '#000000', // Black
+        //   lineWidth: 3.0,
+        // ));
 
         // Walk to Destination
-        maplibreController?.addLine(maplibre.LineOptions(
-          geometry: endWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-          lineColor: '#000000',
-          lineWidth: 3.0,
-        ));
+        // maplibreController?.addLine(maplibre.LineOptions(
+        //   geometry: endWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
+        //   lineColor: '#000000',
+        //   lineWidth: 3.0,
+        // ));
+
       }
     }
   }
@@ -640,6 +840,190 @@ class _MapScreenState extends State<MapScreen> {
     await maplibreController?.addImage('dest-icon', destList);
   }
 
+  List<Widget> _suggestedRoutesSheet(){
+    return [
+        const Text(
+          'Suggested Routes',
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'Pick the jeep you wish to ride and it will give you the walking distance, and estimated fare.',
+          style: TextStyle(color: fontColor),
+        ),
+        ...suggestedRoutes.map((result) {
+
+          final startWalkText = result.actualStartWalk != null 
+              ? '${result.actualStartWalk!.toStringAsFixed(0)}m'
+              : '~${result.estimatedStartWalk.toStringAsFixed(0)}m';
+              
+          final endWalkText = result.actualEndWalk != null 
+              ? '${result.actualEndWalk!.toStringAsFixed(0)}m'
+              : '~${result.estimatedEndWalk.toStringAsFixed(0)}m';
+
+          final fareText = 'Php ${result.estimatedFare.toStringAsFixed(2)}';
+          final rideDistanceText = '${result.ridingDistanceKm.toStringAsFixed(1)} km';
+
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 8.0),
+            child: ListTile(
+              leading: const Icon(Icons.directions_bus, color: Colors.purple),
+              title: Text(result.routeName, style: const TextStyle(fontWeight: FontWeight.bold)),
+              trailing: result.isFetchingActualRoute 
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () async {
+                
+                // 1. ANIMATION: If the card is already showing, slide it UP first
+                if (_showFloatingCard) {
+                  setState(() { _showFloatingCard = false; });
+                  // Wait for it to slide up out of view before changing the data
+                  await Future.delayed(const Duration(milliseconds: 300)); 
+                }
+                
+                setState(() { selectedRoute = result;});
+                drawMapElements();
+
+                // 3. Slide the sheet DOWN to get it out of the way
+                if (sheetController.isAttached) {
+                  sheetController.animateTo(
+                    0.26, // Almost minimized, but leaves a grab handle visible
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                }
+                
+                // 4. ANIMATION: Slide the top card DOWN with the new data
+                setState(() { _showFloatingCard = true; });
+
+                // Fetch OSRM only if we haven't yet
+                if (result.actualStartWalk == null && startPin != null && destinationPin != null) {
+                  setState(() { result.isFetchingActualRoute = true; });
+
+                  final routeData = allRoutes.firstWhere((r) => r.name == result.routeName);
+                  final boardPoint = routeData.polylineData!.points[result.boardIndex];
+                  final alightPoint = routeData.polylineData!.points[result.alightIndex];
+
+                  // switched to ORS from OSRM
+                  final startLeg = await fetchWalkingRouteFromOSRM(startPin!, boardPoint);
+                  final endLeg = await fetchWalkingRouteFromOSRM(alightPoint, destinationPin!);
+
+                  if (startLeg != null && endLeg != null) {
+                    setState(() {
+                      result.actualWalkPathStart = startLeg['path'];
+                      result.actualWalkPathEnd = endLeg['path'];
+                      result.actualStartWalk = startLeg['distance'];
+                      result.actualEndWalk = endLeg['distance'];
+                    });
+                    drawMapElements();
+                  }
+                  
+                  setState(() { result.isFetchingActualRoute = false; });
+                }
+              },
+            ),
+          );
+        }
+      )
+    ];
+  }
+  
+  Widget _buildFloatingRouteDetails() {
+    // If no route is selected, don't try to read its data
+    if (selectedRoute == null) return const SizedBox.shrink();
+
+    final startWalkText = selectedRoute!.actualStartWalk != null 
+        ? '${selectedRoute!.actualStartWalk!.toStringAsFixed(0)}m'
+        : '~${selectedRoute!.estimatedStartWalk.toStringAsFixed(0)}m';
+        
+    final endWalkText = selectedRoute!.actualEndWalk != null 
+        ? '${selectedRoute!.actualEndWalk!.toStringAsFixed(0)}m'
+        : '~${selectedRoute!.estimatedEndWalk.toStringAsFixed(0)}m';
+
+    final fareText = 'Php ${selectedRoute!.estimatedFare.toStringAsFixed(2)}';
+    final rideDistanceText = '${selectedRoute!.ridingDistanceKm.toStringAsFixed(1)} km';
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutBack,
+      // If true, it sits at 60px (covering the header). If false, it hides off-screen at -150px.
+      top: _showFloatingCard ? 60.0 : -150.0, 
+      left: 0,
+      right: 0,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: btnColor, // Using your custom color
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              offset: const Offset(0, 10),
+              blurRadius: 20
+            )
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // Hugs the content
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Route Name & Close Button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    selectedRoute!.routeName,
+                    style: TextStyle(
+                      fontSize: 20, 
+                      fontWeight: FontWeight.bold, 
+                      color: primaryColor,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    // When the user dismisses the card
+                    setState(() { _showFloatingCard = false; });
+                    // Pop the sheet back up to show the list!
+                    if (sheetController.isAttached) {
+                      sheetController.animateTo(0.4, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                    }
+                  },
+                  child: Icon(Icons.close, color: fontColor),
+                )
+              ],
+            ),
+            const SizedBox(height: 10),
+            
+            // Bottom Row: Details
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Walk: $startWalkText + $endWalkText', style: TextStyle(color: fontColor, fontSize: 12)),
+                    Text('Ride: $rideDistanceText', style: TextStyle(color: fontColor, fontSize: 12)),
+                  ],
+                ),
+                Text(
+                  fareText,
+                  style: TextStyle(
+                    fontSize: 22, 
+                    fontWeight: FontWeight.bold, 
+                    color: fontColor
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
   // --- NEW LOGIC: A reusable button builder ---
   Widget _buildPinButton({
     required String label,
@@ -773,77 +1157,7 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ];
     } else {
-      return [
-        const Text(
-          'Suggested Routes',
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: fontColor),
-        ),
-        const SizedBox(height: 15),
-        ...suggestedRoutes.map((result) {
-
-          final startWalkText = result.actualStartWalk != null 
-              ? '${result.actualStartWalk!.toStringAsFixed(0)}m'
-              : '~${result.estimatedStartWalk.toStringAsFixed(0)}m';
-              
-          final endWalkText = result.actualEndWalk != null 
-              ? '${result.actualEndWalk!.toStringAsFixed(0)}m'
-              : '~${result.estimatedEndWalk.toStringAsFixed(0)}m';
-
-          final fareText = 'Php ${result.estimatedFare.toStringAsFixed(2)}';
-          final rideDistanceText = '${result.ridingDistanceKm.toStringAsFixed(1)} km';
-
-          return Card(
-            margin: const EdgeInsets.symmetric(vertical: 8.0),
-            child: ListTile(
-              leading: const Icon(Icons.directions_bus, color: Colors.purple),
-              title: Text(result.routeName, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(
-                'Walk to Jeep: $startWalkText | Jeep to Dest: $endWalkText\n'
-                'Ride: $rideDistanceText | Est. Fare: $fareText'
-              ),
-              trailing: result.isFetchingActualRoute 
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () async {
-                setState(() {
-                  selectedRoute = result;
-                });
-                drawMapElements();
-
-                // Fetch OSRM only if we haven't yet
-                if (result.actualStartWalk == null && startPin != null && destinationPin != null) {
-                  setState(() { result.isFetchingActualRoute = true; });
-
-                  final routeData = allRoutes.firstWhere((r) => r.name == result.routeName);
-                  final boardPoint = routeData.polylineData!.points[result.boardIndex];
-                  final alightPoint = routeData.polylineData!.points[result.alightIndex];
-
-                  final startLeg = await fetchWalkingRouteFromOSRM(startPin!, boardPoint);
-                  final endLeg = await fetchWalkingRouteFromOSRM(alightPoint, destinationPin!);
-
-                  if (startLeg != null && endLeg != null) {
-                    setState(() {
-                      result.actualWalkPathStart = startLeg['path'];
-                      result.actualWalkPathEnd = endLeg['path'];
-                      result.actualStartWalk = startLeg['distance'];
-                      result.actualEndWalk = endLeg['distance'];
-                    });
-                    drawMapElements();
-                  }
-                  
-                  setState(() { result.isFetchingActualRoute = false; });
-                }
-
-                sheetController.animateTo(
-                  0.26,
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeInOut,
-                );
-              },
-            ),
-          );
-        }),
-      ];
+      return _suggestedRoutesSheet();
     }
   }
   
@@ -1258,10 +1572,12 @@ class _MapScreenState extends State<MapScreen> {
                 if (currentPinMode == PinMode.start) {
                   startPin = standardCoords;
                   currentPinMode = PinMode.none;
+                  _clearRoutingData();
                 } else if (currentPinMode == PinMode.destination) {
                   destinationPin = standardCoords;
                   _currentDestinationName = '';
                   currentPinMode = PinMode.none;
+                  _clearRoutingData();
                 }
                 // (We will add the code to physically draw the pins here in the next step)
                 drawMapElements();
@@ -1278,7 +1594,9 @@ class _MapScreenState extends State<MapScreen> {
 
             minMaxZoomPreference: const maplibre.MinMaxZoomPreference(11.0, 22.0),
           ),
-
+          
+          
+          
           SafeArea(
             child: Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -1476,6 +1794,7 @@ class _MapScreenState extends State<MapScreen> {
                                     startPin = null;
                                     enableGPS = false; // Wiping the pin wipes GPS tracking
                                     currentPinMode = PinMode.none;
+                                    _clearRoutingData();
                                   } else if (currentPinMode == PinMode.start) {
                                     // Action 2: Cancel selection
                                     currentPinMode = PinMode.none;
@@ -1499,6 +1818,7 @@ class _MapScreenState extends State<MapScreen> {
                                   if (destinationPin != null) {
                                     destinationPin = null;
                                     currentPinMode = PinMode.none;
+                                    _clearRoutingData();
                                   } else if (currentPinMode == PinMode.destination) {
                                     currentPinMode = PinMode.none;
                                   } else {
@@ -1559,7 +1879,8 @@ class _MapScreenState extends State<MapScreen> {
                                   suggestedRoutes = bestRoutes;
                                   // Clear manual toggles to clean up the map for the new search
                                   for (var r in allRoutes) { r.isVisible = false; }
-                                  selectedRoute = null; 
+                                  selectedRoute = null;
+                                  _selectedIndex = 1;
                                 });
 
                                 // Trigger the animation to push the sheet to the top of the screen
@@ -1821,6 +2142,9 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
+        
+          _buildFloatingRouteDetails(),
+
         ],
       ),
       // Navigation Bar
