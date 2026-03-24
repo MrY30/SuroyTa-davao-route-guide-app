@@ -865,13 +865,27 @@ class _MapScreenState extends State<MapScreen> {
           final rideDistanceText = '${result.ridingDistanceKm.toStringAsFixed(1)} km';
 
           return Card(
-            margin: const EdgeInsets.symmetric(vertical: 8.0),
+            margin: const EdgeInsets.symmetric(vertical: 15.0),
+            color: btnColor,
+            elevation: 10,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             child: ListTile(
-              leading: const Icon(Icons.directions_bus, color: Colors.purple),
-              title: Text(result.routeName, style: const TextStyle(fontWeight: FontWeight.bold)),
+              leading: Image.asset('assets/images/jeep_logo.png', width: 35, height: 35),
+              title: Text(
+                result.routeName, 
+                style: TextStyle(
+                  color: fontColor, 
+                  fontSize: 30, 
+                  fontFamily: 'Cubao',
+                  shadows: [Shadow(
+                      offset: Offset(1, 4),
+                      blurRadius: 7,
+                      color: Colors.black.withOpacity(0.5),
+                    )] 
+                )),
               trailing: result.isFetchingActualRoute 
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.arrow_forward_ios, size: 16),
+                  : const Icon(Icons.arrow_forward_ios, size: 16, color: fontColor),
               onTap: () async {
                 
                 // 1. ANIMATION: If the card is already showing, slide it UP first
@@ -947,12 +961,12 @@ class _MapScreenState extends State<MapScreen> {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutBack,
       // If true, it sits at 60px (covering the header). If false, it hides off-screen at -150px.
-      top: _showFloatingCard ? 60.0 : -150.0, 
+      top: _showFloatingCard ? 40.0 : -150.0, 
       left: 0,
       right: 0,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.symmetric(horizontal: 15),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: btnColor, // Using your custom color
           borderRadius: BorderRadius.circular(15),
@@ -976,8 +990,8 @@ class _MapScreenState extends State<MapScreen> {
                   child: Text(
                     selectedRoute!.routeName,
                     style: TextStyle(
-                      fontSize: 20, 
-                      fontWeight: FontWeight.bold, 
+                      fontSize: 45, 
+                      fontFamily: 'Cubao',
                       color: primaryColor,
                     ),
                   ),
@@ -995,7 +1009,7 @@ class _MapScreenState extends State<MapScreen> {
                 )
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 5),
             
             // Bottom Row: Details
             Row(
@@ -1004,8 +1018,8 @@ class _MapScreenState extends State<MapScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Walk: $startWalkText + $endWalkText', style: TextStyle(color: fontColor, fontSize: 12)),
-                    Text('Ride: $rideDistanceText', style: TextStyle(color: fontColor, fontSize: 12)),
+                    Text('Walk: $startWalkText + $endWalkText', style: TextStyle(color: fontColor, fontSize: 15)),
+                    Text('Ride: $rideDistanceText', style: TextStyle(color: fontColor, fontSize: 15)),
                   ],
                 ),
                 Text(
@@ -1595,8 +1609,6 @@ class _MapScreenState extends State<MapScreen> {
             minMaxZoomPreference: const maplibre.MinMaxZoomPreference(11.0, 22.0),
           ),
           
-          
-          
           SafeArea(
             child: Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -2001,6 +2013,8 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           
+          _buildFloatingRouteDetails(),
+
           // The Swipe-Up Bottom Sheet
           DraggableScrollableSheet(
             controller: sheetController, // Attached the remote control here
@@ -2142,8 +2156,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
-        
-          _buildFloatingRouteDetails(),
 
         ],
       ),
