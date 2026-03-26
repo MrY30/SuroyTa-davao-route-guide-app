@@ -13,14 +13,13 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'models/favorite_location.dart';
 import 'hive_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-// import 'package:open_route_service/open_route_service.dart';
 
 // NOT SO FINAL COLORS
 const Color primaryColor = Color(0xFF42c585);
-const Color fontColor = Color(0xfff9f5f0); // Texts and Icons
-const Color btnColor = Color(0xff184a46); // Navigation Bar, FABs, and Elevated Buttons
-const Color sheetBackgroundColor = Color(0xff1f2730); // Draggable Scrollable Sheet
-const Color unselectedNavColor = Color(0xff9bb2a7); // Navigation Icons and Text not selected
+const Color fontColor = Color(0xfff9f5f0);
+const Color btnColor = Color(0xff184a46);
+const Color sheetBackgroundColor = Color(0xff1f2730);
+const Color unselectedNavColor = Color(0xff9bb2a7);
 const Color cardColor = Color(0xff374656);
 const Color deleteColor = Color(0xffdb5f4e);
 const Color darkDeleteColor = Color(0xffa83525);
@@ -386,68 +385,6 @@ class _MapScreenState extends State<MapScreen> {
     };
   }
 
-  // --- Fetching Walking Route using ORS ---
-  // Future<Map<String, dynamic>?> fetchWalkingRouteFromORS(LatLng start, LatLng end) async {
-  //   // 1. Establish our baseline straight-line distance
-  //   final Distance haversine = const Distance();
-  //   final double straightLineDist = haversine.as(LengthUnit.Meter, start, end);
-
-  //   // 2. Initialize the OpenRouteService client
-  //   // Replace with your actual API key!
-  //   final OpenRouteService client = OpenRouteService(apiKey: '${dotenv.env['ORS_API_KEY']}');
-
-  //   try {
-  //     // 3. Use the correct package method: directionsRouteCoordsGet
-  //     final List<ORSCoordinate> routeCoordinates = await client.directionsRouteCoordsGet(
-  //       startCoordinate: ORSCoordinate(latitude: start.latitude, longitude: start.longitude),
-  //       endCoordinate: ORSCoordinate(latitude: end.latitude, longitude: end.longitude),
-  //       profileOverride: ORSProfile.footWalking,
-  //     ).timeout(const Duration(seconds: 5));
-
-  //     // 4. Check if we got a valid route back
-  //     if (routeCoordinates.isNotEmpty) {
-        
-  //       // Convert the package's ORSCoordinates to FlutterMap LatLngs
-  //       List<LatLng> path = routeCoordinates
-  //           .map((coord) => LatLng(coord.latitude, coord.longitude))
-  //           .toList();
-
-  //       // 5. Calculate the total walking distance ourselves!
-  //       // We just loop through the path and add up the length of each little segment.
-  //       double orsDistance = 0.0;
-  //       for (int i = 0; i < path.length - 1; i++) {
-  //         orsDistance += haversine.as(LengthUnit.Meter, path[i], path[i + 1]);
-  //       }
-        
-  //       // 6. THE SANITY CHECK
-  //       if (orsDistance > (straightLineDist * 3) && straightLineDist < 500) {
-  //         debugPrint("ORS returned a massive detour. Falling back to straight line.");
-  //         return {
-  //           'path': [start, end],
-  //           'distance': straightLineDist,
-  //         };
-  //       }
-
-  //       return {
-  //         'path': path,
-  //         'distance': orsDistance,
-  //       };
-  //     } else {
-  //       debugPrint("ORS Package returned an empty route.");
-  //     }
-
-  //   } catch (e) {
-  //     // If the emulator blocks the connection, the error prints here
-  //     debugPrint("ORS Package Error: $e");
-  //   }
-
-  //   // 7. THE FALLBACK
-  //   return {
-  //     'path': [start, end],
-  //     'distance': straightLineDist,
-  //   };
-  // }
-
   // 2. Logic: Loading the Catalog
   // --- UPDATED LOGIC: Loading Catalog with Colors ---
   Future<void> initializeRouteList() async {
@@ -506,7 +443,8 @@ class _MapScreenState extends State<MapScreen> {
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
       );
-      _showCustomToast("Loading all routes on map", icon: Icons.notifications);
+      // _showCustomToast("Loading all routes on map", icon: Icons.notifications);
+      Fluttertoast.showToast(msg: 'Loading all routes on map', backgroundColor: cardColor);
     }
 
     // Loop through ALL routes, not just the filtered ones
@@ -556,7 +494,8 @@ class _MapScreenState extends State<MapScreen> {
     // 1. Check if GPS hardware is turned on
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      _showCustomToast("Please enable GPS.", icon: Icons.notifications);
+      // _showCustomToast("Please enable GPS.", icon: Icons.notifications);
+      Fluttertoast.showToast(msg: 'Please enable GPS.', backgroundColor: cardColor);
       return;
     }
 
@@ -565,13 +504,15 @@ class _MapScreenState extends State<MapScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        _showCustomToast("Location permissions denied.", icon: Icons.notifications);
+        // _showCustomToast("Location permissions denied.", icon: Icons.notifications);
+        Fluttertoast.showToast(msg: 'Location permissions denied.', backgroundColor: cardColor);
         return;
       }
     }
     
     if (permission == LocationPermission.deniedForever) {
-      _showCustomToast("Permissions permanently denied.", icon: Icons.notifications);
+      // _showCustomToast("Permissions permanently denied.", icon: Icons.notifications);
+      Fluttertoast.showToast(msg: 'Permissions permanently denied.', backgroundColor: cardColor);
       return;
     }
 
@@ -598,6 +539,8 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> searchLocation(String query) async {
     if (query.isEmpty) return;
 
+    // FocusManager.instance.primaryFocus?.unfocus();
+
     // 1. THE SMART INTERCEPTOR (Regex checks for "number, number")
     final RegExp coordRegExp = RegExp(r'^([-+]?\d{1,2}(?:\.\d+)?),\s*([-+]?\d{1,3}(?:\.\d+)?)$');
     final match = coordRegExp.firstMatch(query);
@@ -607,7 +550,7 @@ class _MapScreenState extends State<MapScreen> {
       final lat = double.parse(match.group(1)!);
       final lon = double.parse(match.group(2)!);
       LatLng searchResult = LatLng(lat, lon);
-
+      
       setState((){
         destinationPin = searchResult;
         _clearRoutingData();
@@ -629,12 +572,15 @@ class _MapScreenState extends State<MapScreen> {
       });
        
       await _saveToHistory("Pinned Coordinate", searchResult); // Save to Hive
-      _showCustomToast('Coordinate dropped!', icon: Icons.notifications);
+
+      // _showCustomToast('Coordinate dropped!', icon: Icons.notifications);
+      Fluttertoast.showToast(msg: 'Coordinate dropped!', backgroundColor: cardColor);
       return;
     }
 
     // PATH B: It's text. Proceed with Nominatim Geocoding.
-    _showCustomToast('Searching for "$query" ...', icon: Icons.notifications);
+    // _showCustomToast('Searching for "$query" ...', icon: Icons.notifications);
+    Fluttertoast.showToast(msg: 'Searching for "$query" ...', backgroundColor: cardColor);
 
     final String scopedQuery = "$query, Davao City";
     final url = 'https://nominatim.openstreetmap.org/search?q=$scopedQuery&format=json&limit=1';
@@ -676,7 +622,8 @@ class _MapScreenState extends State<MapScreen> {
           await _saveToHistory(displayName, searchResult); // Save to Hive
           
         } else {
-          _showCustomToast("Location not found in Davao City.", icon: Icons.notifications);
+          // _showCustomToast("Location not found in Davao City.", icon: Icons.notifications);
+          Fluttertoast.showToast(msg: 'Location not found in Davao City.', backgroundColor: cardColor);
         }
       }
     } catch (e) {
@@ -1784,7 +1731,8 @@ class _MapScreenState extends State<MapScreen> {
                 await _hiveService.deleteLocation(currentFav.id);
                 setState(() {});
                 if(context.mounted){
-                  _showCustomToast("Removed from Favorites", icon: Icons.notifications);
+                  // _showCustomToast("Removed from Favorites", icon: Icons.notifications);
+                  Fluttertoast.showToast(msg: 'Removed from Favorites', backgroundColor: cardColor);
                 }
               } else{
                 setState(() {
@@ -1849,6 +1797,7 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
+      resizeToAvoidBottomInset: false,
       backgroundColor: primaryColor,
       body: Stack(
         children: [
@@ -2044,7 +1993,8 @@ class _MapScreenState extends State<MapScreen> {
                               backgroundColor: canFind ? btnColor : disableColor,
                               onPressed: canFind ? () async {
                                 if (startPin == null || destinationPin == null) {
-                                  _showCustomToast("Please select Start and Target on the map.", icon: Icons.notifications);
+                                  // _showCustomToast("Please select Start and Target on the map.", icon: Icons.notifications);
+                                  Fluttertoast.showToast(msg: 'Please select Start and Target on the map.', backgroundColor: cardColor);
                                   return;
                                 }
 
@@ -2082,12 +2032,14 @@ class _MapScreenState extends State<MapScreen> {
                                   );
                                 } else {
                                   if(context.mounted){
-                                    _showCustomToast("No routes found.", icon: Icons.notifications);
+                                    // _showCustomToast("No routes found.", icon: Icons.notifications);
+                                    Fluttertoast.showToast(msg: 'No routes found.', backgroundColor: cardColor);
                                   }
                                 }
                               } : () {
                                 // If they tap the disabled button, gently tell them why
-                                _showCustomToast("Please place both Start and Target pins first.", icon: Icons.notifications);
+                                // _showCustomToast("Please place both Start and Target pins first.", icon: Icons.notifications);
+                                Fluttertoast.showToast(msg: 'Please place both Start and Target pins first.', backgroundColor: cardColor);
                               },
                               icon: const Icon(Icons.navigation, color: fontColor),
                               label: const Text("Find", style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
@@ -2194,6 +2146,7 @@ class _MapScreenState extends State<MapScreen> {
                       children: [
                         TextButton(
                           onPressed: () {
+                            FocusManager.instance.primaryFocus?.unfocus();
                             setState(() => _isSavePopupVisible = false); // Dismiss
                           },
                           child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
@@ -2206,6 +2159,7 @@ class _MapScreenState extends State<MapScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                           onPressed: () async {
+                            FocusManager.instance.primaryFocus?.unfocus();
                             // 1. Fallback name if they left it blank
                             final finalName = _saveNameController.text.trim().isEmpty 
                                 ? 'Saved Location' 
@@ -2224,13 +2178,17 @@ class _MapScreenState extends State<MapScreen> {
                             // 3. Save to database
                             await _hiveService.saveLocation(newFav);
 
+                            // 3. THE FIX: Wait 300ms for the keyboard to physically leave the screen
+                            // await Future.delayed(const Duration(milliseconds: 300));
+
                             // 4. Close the popup and notify user
                             setState(() {
                               _isSavePopupVisible = false;
                             });
                             
                             if (context.mounted) {
-                              _showCustomToast("Added to Favorites!", icon: Icons.notifications);
+                              // _showCustomToast("Added to Favorites!", icon: Icons.notifications);
+                              Fluttertoast.showToast(msg: 'Added to Favorites!', backgroundColor: cardColor);
                             }
                           },
                           child: const Text('Save'),
