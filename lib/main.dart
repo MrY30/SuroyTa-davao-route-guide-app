@@ -853,25 +853,44 @@ class _MapScreenState extends State<MapScreen> {
         ),
         ...suggestedRoutes.map((result) {
 
-          final startWalkText = result.actualStartWalk != null 
-              ? '${result.actualStartWalk!.toStringAsFixed(0)}m'
-              : '~${result.estimatedStartWalk.toStringAsFixed(0)}m';
+          // final startWalkText = result.actualStartWalk != null 
+          //     ? '${result.actualStartWalk!.toStringAsFixed(0)}m'
+          //     : '~${result.estimatedStartWalk.toStringAsFixed(0)}m';
               
-          final endWalkText = result.actualEndWalk != null 
-              ? '${result.actualEndWalk!.toStringAsFixed(0)}m'
-              : '~${result.estimatedEndWalk.toStringAsFixed(0)}m';
+          // final endWalkText = result.actualEndWalk != null 
+          //     ? '${result.actualEndWalk!.toStringAsFixed(0)}m'
+          //     : '~${result.estimatedEndWalk.toStringAsFixed(0)}m';
 
-          final fareText = 'Php ${result.estimatedFare.toStringAsFixed(2)}';
-          final rideDistanceText = '${result.ridingDistanceKm.toStringAsFixed(1)} km';
+          // final fareText = 'Php ${result.estimatedFare.toStringAsFixed(2)}';
+          // final rideDistanceText = '${result.ridingDistanceKm.toStringAsFixed(1)} km';
 
           return Card(
-            margin: const EdgeInsets.symmetric(vertical: 8.0),
+            margin: const EdgeInsets.symmetric(vertical: 15.0),
+            color: btnColor,
+            elevation: 10,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             child: ListTile(
-              leading: const Icon(Icons.directions_bus, color: Colors.purple),
-              title: Text(result.routeName, style: const TextStyle(fontWeight: FontWeight.bold)),
+              leading: Image.asset('assets/images/jeep_logo.png', width: 35, height: 35),
+              title: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  result.routeName, 
+                  style: TextStyle(
+                    color: fontColor, 
+                    fontSize: 30, 
+                    fontFamily: 'Cubao',
+                    shadows: [Shadow(
+                        offset: Offset(1, 4),
+                        blurRadius: 7,
+                        color: Colors.black.withOpacity(0.5),
+                      )] 
+                  )
+                ),
+              ),
               trailing: result.isFetchingActualRoute 
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.arrow_forward_ios, size: 16),
+                  : const Icon(Icons.arrow_forward_ios, size: 16, color: fontColor),
               onTap: () async {
                 
                 // 1. ANIMATION: If the card is already showing, slide it UP first
@@ -947,12 +966,12 @@ class _MapScreenState extends State<MapScreen> {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutBack,
       // If true, it sits at 60px (covering the header). If false, it hides off-screen at -150px.
-      top: _showFloatingCard ? 60.0 : -150.0, 
+      top: (_showFloatingCard && _selectedIndex == 1) ? 40.0 : -150.0, 
       left: 0,
       right: 0,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.symmetric(horizontal: 15),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: btnColor, // Using your custom color
           borderRadius: BorderRadius.circular(15),
@@ -973,15 +992,57 @@ class _MapScreenState extends State<MapScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(
-                    selectedRoute!.routeName,
-                    style: TextStyle(
-                      fontSize: 20, 
-                      fontWeight: FontWeight.bold, 
-                      color: primaryColor,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Stack(
+                      children: [
+                        // 1. THE STICKER SHADOW (Bottom Layer)
+                        // Transform.translate physically moves this layer to act like a drop shadow
+                        Transform.translate(
+                          offset: const Offset(1, 9), // Your exact requested offset!
+                          child: Text(
+                            selectedRoute!.routeName,
+                            style: TextStyle(
+                              fontSize: 45, 
+                              fontFamily: 'Cubao',
+                              foreground: Paint()
+                                ..style = PaintingStyle.stroke
+                                ..strokeWidth = 12.0 // Matches your border thickness perfectly
+                                ..color = Colors.black.withOpacity(0.6) // Shadow color & opacity
+                                // MaskFilter is the secret to blurring a custom Paint object!
+                                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0), 
+                            ),
+                          ),
+                        ),
+
+                        // 2. THE THICK BORDER (Middle Layer)
+                        Text(
+                          selectedRoute!.routeName,
+                          style: TextStyle(
+                            fontSize: 45, 
+                            fontFamily: 'Cubao',
+                            foreground: Paint()
+                              ..style = PaintingStyle.stroke
+                              ..strokeWidth = 12.0 
+                              ..color = primaryColor, // Your requested border color
+                          ),
+                        ),
+
+                        // 3. THE SOLID FILL (Top Layer)
+                        Text(
+                          selectedRoute!.routeName,
+                          style: TextStyle(
+                            fontSize: 45, 
+                            fontFamily: 'Cubao',
+                            color: fontColor, 
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                  )
                 ),
+                SizedBox(width: 30),
                 GestureDetector(
                   onTap: () {
                     // When the user dismisses the card
@@ -995,7 +1056,7 @@ class _MapScreenState extends State<MapScreen> {
                 )
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 5),
             
             // Bottom Row: Details
             Row(
@@ -1004,8 +1065,8 @@ class _MapScreenState extends State<MapScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Walk: $startWalkText + $endWalkText', style: TextStyle(color: fontColor, fontSize: 12)),
-                    Text('Ride: $rideDistanceText', style: TextStyle(color: fontColor, fontSize: 12)),
+                    Text('Walk: $startWalkText + $endWalkText', style: TextStyle(color: fontColor, fontSize: 15)),
+                    Text('Ride: $rideDistanceText', style: TextStyle(color: fontColor, fontSize: 15)),
                   ],
                 ),
                 Text(
@@ -1530,6 +1591,223 @@ class _MapScreenState extends State<MapScreen> {
     return null; // No match found
   }
 
+  // WIDGET CENTER:
+  Widget _buildHeaderWidget(){
+    return Container(
+      height: 62,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: btnColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: btnColor.withOpacity(0.3),
+            offset: Offset(0, 20),
+            blurRadius: 20
+          )
+        ],
+      ),
+      child: Center(
+          child:Text(
+          "SUROY TA!",
+          style: TextStyle(
+            fontFamily: 'Cubao',
+            fontSize: 30,
+            color: fontColor,
+            shadows: [
+              Shadow(
+                offset: Offset(1, 4),
+                blurRadius: 7,
+                color: Colors.black.withOpacity(0.5)
+              )
+            ]
+          ),
+        ),
+      )
+    );
+  }
+  
+  Widget _buildLegendWidget(){
+    // 1. Filter out only the routes the user has actively checked
+    final visibleRoutes = allRoutes.where((r) => r.isVisible).toList();
+    // 2. Determine if the legend should be shown
+    final bool showLegend = _selectedIndex == 0 && visibleRoutes.isNotEmpty;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        transitionBuilder: (Widget child, Animation<double> animation){
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: CurvedAnimation(
+                parent: animation, 
+                curve: Curves.easeOutBack, 
+                reverseCurve: Curves.easeIn
+              ),
+              alignment: Alignment.centerLeft,
+              child: child,
+            )
+          );
+        },
+        child: showLegend ? ConstrainedBox(
+          key: const ValueKey('legend_card'),
+          constraints: const BoxConstraints(maxWidth: 180),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: btnColor.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))
+              ]
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, 
+              children: [
+                const Text(
+                  'Legend',
+                  style: TextStyle(
+                    fontSize: 12, 
+                    fontWeight: FontWeight.bold, 
+                    color: fontColor,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // --- NEW: THE SCROLLABLE CAP ---
+                ConstrainedBox(
+                  // Set the maximum height. 200.0 is roughly 6-7 routes before scrolling starts.
+                  constraints: const BoxConstraints(maxHeight: 75.0), 
+                  child: SingleChildScrollView(
+                    // This inner column holds the actual route items
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: visibleRoutes.map((route) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // The Route Color Indicator
+                              Container(
+                                width: 16,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: route.color,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              // The Route Name
+                              Expanded(
+                                child: Text(
+                                  route.name,
+                                  style: const TextStyle(
+                                    fontSize: 10, 
+                                    color: fontColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(), // .toList() is added back here for the inner Column
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        ) : const SizedBox.shrink(key: ValueKey('empty_legend'))
+      )
+    );
+  }
+  
+  Widget _buildFavoriteCardWidget(){
+    return AnimatedScale(
+      scale: (destinationPin != null && !_isSavePopupVisible && _selectedIndex != 0) ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutBack,
+      child: Builder(
+        builder: (context){
+          FavoriteLocation? currentFav = _getCurrentFavorite();
+          bool isSaved = currentFav != null;
+
+          return GestureDetector(
+            onTap: () async{
+              if(isSaved){
+                await _hiveService.deleteLocation(currentFav.id);
+                setState(() {});
+                if(context.mounted){
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Removed from Favorites'))
+                  );
+                }
+              } else{
+                setState(() {
+                  // Pre-fill the text field. If empty, keep it empty so the hint text shows.
+                  _saveNameController.text = _currentDestinationName;
+                  _isSavePopupVisible = true; // Trigger the drop-down animation!
+                });
+              }
+            },
+            child: Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: btnColor.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(13),
+                boxShadow: [
+                  BoxShadow(
+                    color: btnColor.withOpacity(0.3),
+                    offset: Offset(0, 20),
+                    blurRadius: 20
+                  )
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20), 
+                child:Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        isSaved
+                          ? currentFav.name
+                          : (destinationPin != null 
+                              ? '${destinationPin!.latitude.toStringAsFixed(4)}, ${destinationPin!.longitude.toStringAsFixed(4)}'
+                              : ''),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 20,
+                          color: fontColor,
+                          shadows: [
+                            Shadow(
+                              offset: Offset(1, 4),
+                              blurRadius: 7,
+                              color: Colors.black.withOpacity(0.5)
+                            )
+                          ]
+                        ),
+                      ),
+                    ),
+                    Icon(isSaved ? Icons.star : Icons.star_border, color: isSaved ? Colors.amber : Colors.white),
+                  ],
+                )
+              )
+            ),
+          );
+        }
+      )
+    );
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1537,7 +1815,7 @@ class _MapScreenState extends State<MapScreen> {
       backgroundColor: primaryColor,
       body: Stack(
         children: [
-          // The Map Using MapLibre
+          // Map Section: Displays The Map of Davao City Using MapLibre
           maplibre.MapLibreMap(
             // MapLibre natively takes the MapTiler style URL!
             styleString: 'https://api.maptiler.com/maps/streets-v4/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
@@ -1595,149 +1873,27 @@ class _MapScreenState extends State<MapScreen> {
             minMaxZoomPreference: const maplibre.MinMaxZoomPreference(11.0, 22.0),
           ),
           
-          
-          
           SafeArea(
             child: Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Container(
-                    height: 62,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: btnColor,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: btnColor.withOpacity(0.3),
-                          offset: Offset(0, 20),
-                          blurRadius: 20
-                        )
-                      ],
-                    ),
-                    child: Center(
-                        child:Text(
-                        "SUROY TA!",
-                        style: TextStyle(
-                          fontFamily: 'Cubao',
-                          fontSize: 30,
-                          color: fontColor,
-                          shadows: [
-                            Shadow(
-                              offset: Offset(1, 4),
-                              blurRadius: 7,
-                              color: Colors.black.withOpacity(0.5)
-                            )
-                          ]
-                        ),
-                      ),
-                    )
-                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // --- App Header: Displays "SUROY TA!" which is the name of the app ---
+                      _buildHeaderWidget(),
+                      const SizedBox(height: 8),
+                      // --- Legend for Explore tab: Displays the selected routes to Explore its coverage ---
+                      _buildLegendWidget(),
+                      // --- The Favorite Card: Displays the coordinates of the destination pin and allows user to save it to favorites ---
+                      _buildFavoriteCardWidget(),
+                    ],
+                  )
                 ),
           ),
  
-          // --- NEW LAYER: The Dynamic Route Legend ---
-          Positioned(
-            top: 110, // Aligned perfectly with the Star button on the right
-            left: 16,
-            // The BoxConstraints prevent the legend from stretching too wide and covering the whole screen
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 160),
-              child: Builder(
-                builder: (context) {
-                  // 1. Filter out only the routes the user has actively checked
-                  final visibleRoutes = allRoutes.where((r) => r.isVisible).toList();
-                  
-                  // 2. Determine if the legend should be shown
-                  final bool showLegend = _selectedIndex == 0 && visibleRoutes.isNotEmpty;
+          _buildFloatingRouteDetails(),
 
-                  return AnimatedOpacity(
-                    opacity: showLegend ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 300),
-                    child: IgnorePointer(
-                      ignoring: !showLegend, // Don't block map touches if it's invisible
-                      // AnimatedSize makes the card smoothly grow/shrink as items are added/removed
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                        child: Container(
-                          padding: const EdgeInsets.all(12.0),
-                          decoration: BoxDecoration(
-                            color: btnColor.withOpacity(0.8), // Slight transparency looks premium on maps
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: const [
-                              BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min, 
-                            children: [
-                              const Text(
-                                'Legend',
-                                style: TextStyle(
-                                  fontSize: 12, 
-                                  fontWeight: FontWeight.bold, 
-                                  color: fontColor,
-                                  letterSpacing: 1.1,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              
-                              // --- NEW: THE SCROLLABLE CAP ---
-                              ConstrainedBox(
-                                // Set the maximum height. 200.0 is roughly 6-7 routes before scrolling starts.
-                                constraints: const BoxConstraints(maxHeight: 75.0), 
-                                child: SingleChildScrollView(
-                                  // This inner column holds the actual route items
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: visibleRoutes.map((route) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(bottom: 6.0),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            // The Route Color Indicator
-                                            Container(
-                                              width: 16,
-                                              height: 4,
-                                              decoration: BoxDecoration(
-                                                color: route.color,
-                                                borderRadius: BorderRadius.circular(2),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            // The Route Name
-                                            Expanded(
-                                              child: Text(
-                                                route.name,
-                                                style: const TextStyle(
-                                                  fontSize: 10, 
-                                                  color: fontColor,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }).toList(), // .toList() is added back here for the inner Column
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }
-              ),
-            ),
-          ),
-          
           // Dynamic Floating Buttons (Start & Target Pins on the Left, GPS & Find on the Right)
           AnimatedBuilder(
             animation: sheetController,
@@ -1917,90 +2073,6 @@ class _MapScreenState extends State<MapScreen> {
             },
           ),
 
-          // --- NEW LAYER: The Contextual Star Button ---
-          Positioned(
-            top: 110,
-            left: 0,
-            right: 0,
-            child: AnimatedScale(
-              scale: (destinationPin != null && !_isSavePopupVisible && _selectedIndex != 0) ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutBack,
-              child: Builder(
-                builder: (context){
-                  FavoriteLocation? currentFav = _getCurrentFavorite();
-                  bool isSaved = currentFav != null;
-
-                  return GestureDetector(
-                    onTap: () async{
-                      if(isSaved){
-                        await _hiveService.deleteLocation(currentFav.id);
-                        setState(() {});
-                        if(context.mounted){
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Removed from Favorites'))
-                          );
-                        }
-                      } else{
-                        setState(() {
-                          // Pre-fill the text field. If empty, keep it empty so the hint text shows.
-                          _saveNameController.text = _currentDestinationName;
-                          _isSavePopupVisible = true; // Trigger the drop-down animation!
-                        });
-                      }
-                    },
-                    child: Container(
-                      height: 40,
-                      margin: const EdgeInsets.symmetric(horizontal: 20),
-                      decoration: BoxDecoration(
-                        color: btnColor.withOpacity(0.8),
-                        borderRadius: BorderRadius.circular(13),
-                        boxShadow: [
-                          BoxShadow(
-                            color: btnColor.withOpacity(0.3),
-                            offset: Offset(0, 20),
-                            blurRadius: 20
-                          )
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20), 
-                        child:Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                isSaved
-                                  ? currentFav.name
-                                  : (destinationPin != null 
-                                      ? '${destinationPin!.latitude.toStringAsFixed(4)}, ${destinationPin!.longitude.toStringAsFixed(4)}'
-                                      : ''),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  color: fontColor,
-                                  shadows: [
-                                    Shadow(
-                                      offset: Offset(1, 4),
-                                      blurRadius: 7,
-                                      color: Colors.black.withOpacity(0.5)
-                                    )
-                                  ]
-                                ),
-                              ),
-                            ),
-                            Icon(isSaved ? Icons.star : Icons.star_border, color: isSaved ? Colors.amber : Colors.white),
-                          ],
-                        )
-                      )
-                    ),
-                  );
-                }
-              )
-            ),
-          ),
-          
           // The Swipe-Up Bottom Sheet
           DraggableScrollableSheet(
             controller: sheetController, // Attached the remote control here
@@ -2142,8 +2214,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
-        
-          _buildFloatingRouteDetails(),
 
         ],
       ),
