@@ -274,10 +274,58 @@ class _MapScreenState extends State<MapScreen> {
   int _selectedIndex = 1;
   bool _showFloatingCard = false;
 
+  late FToast fToast;
+
   @override
   void initState() {
     super.initState();
     initializeRouteList();
+
+    fToast = FToast();
+    fToast.init(context);
+  }
+
+  void _showCustomToast(String message, {IconData? icon}) {
+    Widget toast = Container(
+      margin: const EdgeInsets.only(bottom: 90),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+      decoration: BoxDecoration(
+        color: cardColor.withOpacity(0.9), // Your premium UI color!
+        borderRadius: BorderRadius.circular(25.0), // Creates a modern "pill" shape
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            offset: const Offset(0, 5),
+            blurRadius: 10,
+          )
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min, // Prevents it from stretching full width
+        children: [
+          // If you pass an icon, it shows up here (like a checkmark or bus icon)
+          if (icon != null) ...[
+            Icon(icon, color: primaryColor), 
+            const SizedBox(width: 12.0),
+          ],
+          Text(
+            message,
+            style: TextStyle(
+              color: fontColor, 
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // Show the custom widget
+    fToast.showToast(
+      child: toast,
+      gravity: ToastGravity.SNACKBAR, // You can also use ToastGravity.TOP
+      toastDuration: const Duration(seconds: 2),
+    );
   }
 
   // --- NEW STATE: Favorites Popup Overlay ---
@@ -453,13 +501,12 @@ class _MapScreenState extends State<MapScreen> {
   // --- NEW LOGIC: Bulk Route Actions ---
   Future<void> _toggleAllRoutes(bool showAll) async {
     if(showAll){
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   SnackBar(
-      //     content: Text('Loading all routes on map...'), 
-      //     duration: const Duration(milliseconds: 1500)
-      //   ),
-      // );
-      Fluttertoast.showToast(msg: "Loading all routes on map");
+      sheetController.animateTo(
+        0.26,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+      _showCustomToast("Loading all routes on map", icon: Icons.notifications);
     }
 
     // Loop through ALL routes, not just the filtered ones
@@ -509,7 +556,7 @@ class _MapScreenState extends State<MapScreen> {
     // 1. Check if GPS hardware is turned on
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enable GPS.')));
+      _showCustomToast("Please enable GPS.", icon: Icons.notifications);
       return;
     }
 
@@ -518,13 +565,13 @@ class _MapScreenState extends State<MapScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location permissions denied.')));
+        _showCustomToast("Location permissions denied.", icon: Icons.notifications);
         return;
       }
     }
     
     if (permission == LocationPermission.deniedForever) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permissions permanently denied.')));
+      _showCustomToast("Permissions permanently denied.", icon: Icons.notifications);
       return;
     }
 
@@ -582,18 +629,12 @@ class _MapScreenState extends State<MapScreen> {
       });
        
       await _saveToHistory("Pinned Coordinate", searchResult); // Save to Hive
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Coordinate dropped!'), duration: Duration(seconds: 1)),
-      );
-
-      return; // Exit the function early!
+      _showCustomToast('Coordinate dropped!', icon: Icons.notifications);
+      return;
     }
 
     // PATH B: It's text. Proceed with Nominatim Geocoding.
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Searching for "$query"...'), duration: const Duration(seconds: 1)),
-    );
+    _showCustomToast('Searching for "$query" ...', icon: Icons.notifications);
 
     final String scopedQuery = "$query, Davao City";
     final url = 'https://nominatim.openstreetmap.org/search?q=$scopedQuery&format=json&limit=1';
@@ -635,9 +676,7 @@ class _MapScreenState extends State<MapScreen> {
           await _saveToHistory(displayName, searchResult); // Save to Hive
           
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location not found in Davao City.'))
-          );
+          _showCustomToast("Location not found in Davao City.", icon: Icons.notifications);
         }
       }
     } catch (e) {
@@ -1745,9 +1784,7 @@ class _MapScreenState extends State<MapScreen> {
                 await _hiveService.deleteLocation(currentFav.id);
                 setState(() {});
                 if(context.mounted){
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Removed from Favorites'))
-                  );
+                  _showCustomToast("Removed from Favorites", icon: Icons.notifications);
                 }
               } else{
                 setState(() {
@@ -2007,10 +2044,7 @@ class _MapScreenState extends State<MapScreen> {
                               backgroundColor: canFind ? btnColor : disableColor,
                               onPressed: canFind ? () async {
                                 if (startPin == null || destinationPin == null) {
-                                  // Optional: Show a quick snackbar to the user
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Please select Start and Destination on the map.')),
-                                  );
+                                  _showCustomToast("Please select Start and Target on the map.", icon: Icons.notifications);
                                   return;
                                 }
 
@@ -2048,16 +2082,12 @@ class _MapScreenState extends State<MapScreen> {
                                   );
                                 } else {
                                   if(context.mounted){
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('No routes found.'))
-                                    );
+                                    _showCustomToast("No routes found.", icon: Icons.notifications);
                                   }
                                 }
                               } : () {
                                 // If they tap the disabled button, gently tell them why
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Please place both Start and Target pins first.')),
-                                );
+                                _showCustomToast("Please place both Start and Target pins first.", icon: Icons.notifications);
                               },
                               icon: const Icon(Icons.navigation, color: fontColor),
                               label: const Text("Find", style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
@@ -2200,9 +2230,7 @@ class _MapScreenState extends State<MapScreen> {
                             });
                             
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Added to Favorites!')),
-                              );
+                              _showCustomToast("Added to Favorites!", icon: Icons.notifications);
                             }
                           },
                           child: const Text('Save'),
