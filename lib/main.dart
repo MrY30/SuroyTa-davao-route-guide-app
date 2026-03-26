@@ -116,6 +116,17 @@ class RouteResult {
 
   // A helper getter so we can still easily sort the list by the shortest overall walk
   double get totalEstimatedWalk => estimatedStartWalk + estimatedEndWalk;
+
+  // --- THE NEW MATH PROPERTY ---
+  // Safely calculates the discounted fare using the 4km base threshold
+  double get estimatedDiscountedFare {
+    if (ridingDistanceKm <= 4.0) {
+      return 10.40; // Base fare for first 4km
+    } else {
+      // Base fare + (excess kilometers * 1.44)
+      return 10.40 + ((ridingDistanceKm - 4.0) * 1.44);
+    }
+  }
 }
 
 // 2. The Isolate Function (Must be top-level, outside your classes)
@@ -284,48 +295,48 @@ class _MapScreenState extends State<MapScreen> {
     fToast.init(context);
   }
 
-  void _showCustomToast(String message, {IconData? icon}) {
-    Widget toast = Container(
-      margin: const EdgeInsets.only(bottom: 90),
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-      decoration: BoxDecoration(
-        color: cardColor.withOpacity(0.9), // Your premium UI color!
-        borderRadius: BorderRadius.circular(25.0), // Creates a modern "pill" shape
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            offset: const Offset(0, 5),
-            blurRadius: 10,
-          )
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min, // Prevents it from stretching full width
-        children: [
-          // If you pass an icon, it shows up here (like a checkmark or bus icon)
-          if (icon != null) ...[
-            Icon(icon, color: primaryColor), 
-            const SizedBox(width: 12.0),
-          ],
-          Text(
-            message,
-            style: TextStyle(
-              color: fontColor, 
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
+  // void _showCustomToast(String message, {IconData? icon}) {
+  //   Widget toast = Container(
+  //     margin: const EdgeInsets.only(bottom: 90),
+  //     padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+  //     decoration: BoxDecoration(
+  //       color: cardColor.withOpacity(0.9), // Your premium UI color!
+  //       borderRadius: BorderRadius.circular(25.0), // Creates a modern "pill" shape
+  //       boxShadow: [
+  //         BoxShadow(
+  //           color: Colors.black.withOpacity(0.2),
+  //           offset: const Offset(0, 5),
+  //           blurRadius: 10,
+  //         )
+  //       ],
+  //     ),
+  //     child: Row(
+  //       mainAxisSize: MainAxisSize.min, // Prevents it from stretching full width
+  //       children: [
+  //         // If you pass an icon, it shows up here (like a checkmark or bus icon)
+  //         if (icon != null) ...[
+  //           Icon(icon, color: primaryColor), 
+  //           const SizedBox(width: 12.0),
+  //         ],
+  //         Text(
+  //           message,
+  //           style: TextStyle(
+  //             color: fontColor, 
+  //             fontWeight: FontWeight.bold,
+  //             fontSize: 14,
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
 
-    // Show the custom widget
-    fToast.showToast(
-      child: toast,
-      gravity: ToastGravity.SNACKBAR, // You can also use ToastGravity.TOP
-      toastDuration: const Duration(seconds: 2),
-    );
-  }
+  //   // Show the custom widget
+  //   fToast.showToast(
+  //     child: toast,
+  //     gravity: ToastGravity.SNACKBAR, // You can also use ToastGravity.TOP
+  //     toastDuration: const Duration(seconds: 2),
+  //   );
+  // }
 
   // --- NEW STATE: Favorites Popup Overlay ---
   bool _isSavePopupVisible = false;
@@ -934,32 +945,34 @@ class _MapScreenState extends State<MapScreen> {
   }
   
   Widget _buildFloatingRouteDetails() {
-    // If no route is selected, don't try to read its data
     if (selectedRoute == null) return const SizedBox.shrink();
 
-    final startWalkText = selectedRoute!.actualStartWalk != null 
-        ? '${selectedRoute!.actualStartWalk!.toStringAsFixed(0)}m'
-        : '~${selectedRoute!.estimatedStartWalk.toStringAsFixed(0)}m';
-        
-    final endWalkText = selectedRoute!.actualEndWalk != null 
-        ? '${selectedRoute!.actualEndWalk!.toStringAsFixed(0)}m'
-        : '~${selectedRoute!.estimatedEndWalk.toStringAsFixed(0)}m';
+    // 1. Calculate combined walking distance
+    final totalStartWalk = selectedRoute!.actualStartWalk ?? selectedRoute!.estimatedStartWalk;
+    final totalEndWalk = selectedRoute!.actualEndWalk ?? selectedRoute!.estimatedEndWalk;
+    final totalWalk = totalStartWalk + totalEndWalk;
+    
+    // Only show '~' if we are still relying on estimates
+    final isExactWalk = selectedRoute!.actualStartWalk != null && selectedRoute!.actualEndWalk != null;
+    final walkPrefix = isExactWalk ? '' : '~';
+    final walkText = '$walkPrefix${totalWalk.toStringAsFixed(0)}m';
 
-    final fareText = 'Php ${selectedRoute!.estimatedFare.toStringAsFixed(2)}';
-    final rideDistanceText = '${selectedRoute!.ridingDistanceKm.toStringAsFixed(1)} km';
+    // 2. Format texts
+    final rideDistanceText = '${selectedRoute!.ridingDistanceKm.toStringAsFixed(1)}km';
+    final regularFareText = '₱ ${selectedRoute!.estimatedFare.toStringAsFixed(2)}';
+    final discountedFareText = '₱ ${selectedRoute!.estimatedDiscountedFare.toStringAsFixed(2)}';
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutBack,
-      // If true, it sits at 60px (covering the header). If false, it hides off-screen at -150px.
-      top: (_showFloatingCard && _selectedIndex == 1) ? 40.0 : -150.0, 
+      top: (_showFloatingCard && _selectedIndex == 1) ? 40.0 : -200.0, 
       left: 0,
       right: 0,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 15),
-        padding: const EdgeInsets.all(20),
+        // Removed the global padding here to allow for the two-tone split!
         decoration: BoxDecoration(
-          color: btnColor, // Using your custom color
+          color: btnColor, 
           borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
@@ -970,100 +983,147 @@ class _MapScreenState extends State<MapScreen> {
           ],
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min, // Hugs the content
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, 
+          crossAxisAlignment: CrossAxisAlignment.stretch, // Stretches children horizontally
           children: [
-            // Top Row: Route Name & Close Button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Stack(
-                      children: [
-                        // 1. THE STICKER SHADOW (Bottom Layer)
-                        // Transform.translate physically moves this layer to act like a drop shadow
-                        Transform.translate(
-                          offset: const Offset(1, 9), // Your exact requested offset!
-                          child: Text(
+            // ==========================================
+            // TOP ROW: Route Name & Close Button
+            // ==========================================
+            Padding(
+              padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Stack(
+                        children: [
+                          // Transform.translate(
+                          //   offset: const Offset(1, 9), 
+                          //   child: Text(
+                          //     selectedRoute!.routeName,
+                          //     style: TextStyle(
+                          //       fontSize: 45, 
+                          //       fontFamily: 'Cubao',
+                          //       foreground: Paint()
+                          //         ..style = PaintingStyle.stroke
+                          //         ..strokeWidth = 12.0 
+                          //         ..color = Colors.black.withOpacity(0.6) 
+                          //         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0), 
+                          //     ),
+                          //   ),
+                          // ),
+                          // Text(
+                          //   selectedRoute!.routeName,
+                          //   style: TextStyle(
+                          //     fontSize: 45, 
+                          //     fontFamily: 'Cubao',
+                          //     foreground: Paint()
+                          //       ..style = PaintingStyle.stroke
+                          //       ..strokeWidth = 12.0 
+                          //       ..color = primaryColor, 
+                          //   ),
+                          // ),
+                          Text(
                             selectedRoute!.routeName,
                             style: TextStyle(
                               fontSize: 45, 
                               fontFamily: 'Cubao',
-                              foreground: Paint()
-                                ..style = PaintingStyle.stroke
-                                ..strokeWidth = 12.0 // Matches your border thickness perfectly
-                                ..color = Colors.black.withOpacity(0.6) // Shadow color & opacity
-                                // MaskFilter is the secret to blurring a custom Paint object!
-                                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0), 
+                              color: primaryColor,
+                              shadows: [
+                                Shadow(
+                                  offset: Offset(1, 4),
+                                  blurRadius: 7,
+                                  color: Colors.black.withOpacity(0.5)
+                                )
+                              ] 
                             ),
                           ),
-                        ),
-
-                        // 2. THE THICK BORDER (Middle Layer)
-                        Text(
-                          selectedRoute!.routeName,
-                          style: TextStyle(
-                            fontSize: 45, 
-                            fontFamily: 'Cubao',
-                            foreground: Paint()
-                              ..style = PaintingStyle.stroke
-                              ..strokeWidth = 12.0 
-                              ..color = primaryColor, // Your requested border color
-                          ),
-                        ),
-
-                        // 3. THE SOLID FILL (Top Layer)
-                        Text(
-                          selectedRoute!.routeName,
-                          style: TextStyle(
-                            fontSize: 45, 
-                            fontFamily: 'Cubao',
-                            color: fontColor, 
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                ),
-                SizedBox(width: 30),
-                GestureDetector(
-                  onTap: () {
-                    // When the user dismisses the card
-                    setState(() { _showFloatingCard = false; });
-                    // Pop the sheet back up to show the list!
-                    if (sheetController.isAttached) {
-                      sheetController.animateTo(0.4, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                    }
-                  },
-                  child: Icon(Icons.close, color: fontColor),
-                )
-              ],
-            ),
-            const SizedBox(height: 5),
-            
-            // Bottom Row: Details
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Walk: $startWalkText + $endWalkText', style: TextStyle(color: fontColor, fontSize: 15)),
-                    Text('Ride: $rideDistanceText', style: TextStyle(color: fontColor, fontSize: 15)),
-                  ],
-                ),
-                Text(
-                  fareText,
-                  style: TextStyle(
-                    fontSize: 22, 
-                    fontWeight: FontWeight.bold, 
-                    color: fontColor
+                        ],
+                      ),
+                    )
                   ),
-                ),
-              ],
+                  const SizedBox(width: 30),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() { _showFloatingCard = false; });
+                      if (sheetController.isAttached) {
+                        sheetController.animateTo(0.4, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                      }
+                    },
+                    child: Icon(Icons.close, color: fontColor),
+                  )
+                ],
+              ),
+            ),
+            
+            // ==========================================
+            // BOTTOM ROW: Distances and Fares (Dual-Tone effect)
+            // ==========================================
+            Container(
+              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20, top: 0),
+              // decoration: BoxDecoration(
+              //   // Adds a subtle dark overlay to create the two-tone visual hierarchy
+              //   color: Colors.black.withOpacity(0.15), 
+              //   borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+              // ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // --- LEFT: Distances ---
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.directions_walk, color: fontColor, size: 18),
+                          const SizedBox(width: 6),
+                          Text(walkText, style: TextStyle(color: fontColor, fontSize: 15)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.directions_bus, color: fontColor, size: 18), // Change to Icons.airport_shuttle if you prefer!
+                          const SizedBox(width: 6),
+                          Text(rideDistanceText, style: TextStyle(color: fontColor, fontSize: 15)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  
+                  // --- RIGHT: Fares ---
+                  Row(
+                    children: [
+                      // Discounted Fare Column
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Discounted', style: TextStyle(color: fontColor.withOpacity(0.8), fontSize: 12)),
+                          Text(
+                            discountedFareText,
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: fontColor),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 25),
+                      // Regular Fare Column
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Regular', style: TextStyle(color: fontColor.withOpacity(0.8), fontSize: 12)),
+                          Text(
+                            regularFareText,
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: fontColor),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
