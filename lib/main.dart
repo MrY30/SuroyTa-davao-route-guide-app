@@ -838,6 +838,16 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   List<Widget> _suggestedRoutesSheet(){
+
+    // --- STEP 1: SORT THE ROUTES ---
+    // We sort by Fare first. If Fare is equal, we sort by Walking Distance.
+    suggestedRoutes.sort((a, b){
+      int fareComparison = a.estimatedFare.compareTo(b.estimatedFare);
+      if (fareComparison != 0){
+        return fareComparison;
+      }
+      return a.totalEstimatedWalk.compareTo(b.totalEstimatedWalk);
+    });
     return [
         const Text(
           'Suggested Routes',
@@ -848,48 +858,24 @@ class _MapScreenState extends State<MapScreen> {
           'Pick the jeep you wish to ride and it will give you the walking distance, and estimated fare.',
           style: TextStyle(color: fontColor),
         ),
-        ...suggestedRoutes.map((result) {
+        ...suggestedRoutes.asMap().entries.map((entry){
 
-          // final startWalkText = result.actualStartWalk != null 
-          //     ? '${result.actualStartWalk!.toStringAsFixed(0)}m'
-          //     : '~${result.estimatedStartWalk.toStringAsFixed(0)}m';
-              
-          // final endWalkText = result.actualEndWalk != null 
-          //     ? '${result.actualEndWalk!.toStringAsFixed(0)}m'
-          //     : '~${result.estimatedEndWalk.toStringAsFixed(0)}m';
+          final int index = entry.key;
+          final RouteResult result = entry.value;
 
-          // final fareText = 'Php ${result.estimatedFare.toStringAsFixed(2)}';
-          // final rideDistanceText = '${result.ridingDistanceKm.toStringAsFixed(1)} km';
+          final bool isBestRoute = index == 0;
 
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 15.0),
             color: btnColor,
             elevation: 10,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            child: ListTile(
-              leading: Image.asset('assets/images/jeep_logo.png', width: 35, height: 35),
-              title: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  result.routeName, 
-                  style: TextStyle(
-                    color: fontColor, 
-                    fontSize: 30, 
-                    fontFamily: 'Cubao',
-                    shadows: [Shadow(
-                        offset: Offset(1, 4),
-                        blurRadius: 7,
-                        color: Colors.black.withOpacity(0.5),
-                      )] 
-                  )
-                ),
-              ),
-              trailing: result.isFetchingActualRoute 
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.arrow_forward_ios, size: 16, color: fontColor),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              // side: isBestRoute ? const BorderSide(color: primaryColor, width: 0) : BorderSide.none
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
               onTap: () async {
-                
                 // 1. ANIMATION: If the card is already showing, slide it UP first
                 if (_showFloatingCard) {
                   setState(() { _showFloatingCard = false; });
@@ -937,10 +923,70 @@ class _MapScreenState extends State<MapScreen> {
                   setState(() { result.isFetchingActualRoute = false; });
                 }
               },
-            ),
+              child: Container(
+                height: 60,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    isBestRoute ? Icon(Icons.star_outline, size: 35, color: fontColor) : Image.asset('assets/images/jeep_logo.png', width: 35, height: 35),
+                    const SizedBox(width: 16,),
+                    // 2. MIDDLE TEXT (Route Name & Tag)
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center, // Vertically centers the texts inside the fixed 75px height
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Flexible( // Flexible ensures the font shrinks if it hits the edges
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                result.routeName, 
+                                style: TextStyle(
+                                  color: fontColor, 
+                                  fontSize: 30, 
+                                  fontFamily: 'Cubao',
+                                  height: 1.0, // <-- CRITICAL: Removes invisible font padding!
+                                  shadows: [
+                                    Shadow(
+                                      offset: const Offset(1, 4),
+                                      blurRadius: 7,
+                                      color: Colors.black.withOpacity(0.5),
+                                    )
+                                  ] 
+                                )
+                              ),
+                            ),
+                          ),
+                          // THE TAG: Fits neatly underneath without expanding the card
+                          if (isBestRoute)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 2.0),
+                            child: Text(
+                              'RECOMMENDED', 
+                              style: TextStyle(
+                                color: primaryColor, 
+                                fontSize: 10, 
+                                fontWeight: FontWeight.bold, 
+                                height: 1.0,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    result.isFetchingActualRoute
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.arrow_forward_ios, size: 16, color: fontColor),
+                  ],
+                ),
+              )
+            )
           );
         }
-      )
+      ),
+      const SizedBox(height: 80,)
     ];
   }
   
@@ -1864,7 +1910,8 @@ class _MapScreenState extends State<MapScreen> {
           // Map Section: Displays The Map of Davao City Using MapLibre
           maplibre.MapLibreMap(
             // MapLibre natively takes the MapTiler style URL!
-            styleString: 'https://api.maptiler.com/maps/streets-v4/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
+            // styleString: 'https://api.maptiler.com/maps/streets-v4/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
+            styleString: 'https://api.maptiler.com/maps/019d2d1a-6040-7d1b-be05-18e6303d1ff8/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
             
             // MapLibre has its own CameraPosition and LatLng classes, so we use our alias
             initialCameraPosition: const maplibre.CameraPosition(
@@ -1876,7 +1923,7 @@ class _MapScreenState extends State<MapScreen> {
             rotateGesturesEnabled: true,
 
             compassEnabled: true,
-            compassViewMargins: const Point(16, 150),
+            compassViewMargins: const Point(16, 110),
             
             // Grab the controller once the C++ engine is ready
             onMapCreated: (maplibre.MapLibreMapController controller) {
@@ -2119,7 +2166,7 @@ class _MapScreenState extends State<MapScreen> {
           DraggableScrollableSheet(
             controller: sheetController, // Attached the remote control here
             initialChildSize: 0.96, 
-            minChildSize: _selectedIndex == 1 ? 0.0 : 0.26,     
+            minChildSize: 0.0,     
             maxChildSize: 0.96,
             snap: true,
             snapSizes: const [0.26],     
