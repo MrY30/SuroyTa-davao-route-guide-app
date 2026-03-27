@@ -47,6 +47,8 @@ dependencies:
   path_provider: ^2.1.5
   fluttertoast: ^9.0.0
   open_route_service: ^1.2.7
+  auto_size_text: ^3.0.0
+  google_fonts: ^8.0.2
 
 dev_dependencies:
   flutter_test:

@@ -27,7 +27,7 @@
   {
     "name": "Bunawan via Sasa",
     "file": "assets/routes/dvo_bunawan_sasa.geojson",
-    "color": "#ffc0cb"
+    "color": "#53f0e4"
   },
   {
     "name": "Calinan",
@@ -37,7 +37,7 @@
   {
     "name": "Catalunan Grande",
     "file": "assets/routes/dvo_catalunan_grande.geojson",
-    "color": "#ffff00"
+    "color": "#a40879"
   },
   {
     "name": "Catitipan via JP Laurel",
@@ -62,7 +62,7 @@
   {
     "name": "Jade Valley",
     "file": "assets/routes/dvo_jade_valley.geojson",
-    "color": "#ffc0cb"
+    "color": "#53f0e4"
   },
   {
     "name": "Lasang via Buhangin",
@@ -77,7 +77,7 @@
   {
     "name": "Maa - Agdao",
     "file": "assets/routes/dvo_maa_agdao.geojson",
-    "color": "#ffff00"
+    "color": "#a40879"
   },
   {
     "name": "Maa - Bankerohan",
@@ -97,7 +97,7 @@
   {
     "name": "Matina Aplaya",
     "file": "assets/routes/dvo_matina_aplaya.geojson",
-    "color": "#ffc0cb"
+    "color": "#53f0e4"
   },
   {
     "name": "Matina Crossing",
@@ -112,12 +112,12 @@
   {
     "name": "Mintal",
     "file": "assets/routes/dvo_mintal.geojson",
-    "color": "#ffff00"
+    "color": "#a40879"
   },
   {
     "name": "Obrero",
     "file": "assets/routes/dvo_obrero.geojson",
-    "color": "#ffff00"
+    "color": "#a40879"
   },
   {
     "name": "Panacan - SM City Davao",
@@ -137,7 +137,7 @@
   {
     "name": "Route 1",
     "file": "assets/routes/dvo_route_1.geojson",
-    "color": "#ffc0cb"
+    "color": "#53f0e4"
   },
   {
     "name": "Route 10",
@@ -167,7 +167,7 @@
   {
     "name": "Route 15",
     "file": "assets/routes/dvo_route_15.geojson",
-    "color": "#ffc0cb"
+    "color": "#53f0e4"
   },
   {
     "name": "Route 2",
@@ -182,7 +182,7 @@
   {
     "name": "Route 4",
     "file": "assets/routes/dvo_route_4.geojson",
-    "color": "#ffff00"
+    "color": "#a40879"
   },
   {
     "name": "Route 5",
@@ -202,7 +202,7 @@
   {
     "name": "Route 8",
     "file": "assets/routes/dvo_route_8.geojson",
-    "color": "#ffc0cb"
+    "color": "#53f0e4"
   },
   {
     "name": "Route 9",
@@ -222,7 +222,7 @@
   {
     "name": "Sasa via R. Castillo",
     "file": "assets/routes/dvo_sasa_r_castillo.geojson",
-    "color": "#ffff00"
+    "color": "#a40879"
   },
   {
     "name": "Talomo",
@@ -242,7 +242,7 @@
   {
     "name": "Tibungco via R. Castillo",
     "file": "assets/routes/dvo_tibungco_r_castillo.geojson",
-    "color": "#ffc0cb"
+    "color": "#53f0e4"
   },
   {
     "name": "Toril",
@@ -257,6 +257,6 @@
   {
     "name": "Wa-an",
     "file": "assets/routes/dvo_waan.geojson",
-    "color": "#ffff00"
+    "color": "#a40879"
   }
 ]
