@@ -5,7 +5,7 @@
       "type": "Feature",
       "properties": {
         "name": "Route 1",
-        "color": "#ffc0cb"
+        "color": "#53f0e4"
       },
       "geometry": {
         "coordinates": [

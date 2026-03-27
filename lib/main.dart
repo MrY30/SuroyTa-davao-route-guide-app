@@ -13,6 +13,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'models/favorite_location.dart';
 import 'hive_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // NOT SO FINAL COLORS
 const Color primaryColor = Color(0xFF42c585);
@@ -50,11 +52,12 @@ class SakayTaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sakay Ta',
+      title: 'Suroy Ta',
       debugShowCheckedModeBanner: false, // Removes the debug banner
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.purple),
+        colorScheme: ColorScheme.fromSeed(seedColor: btnColor),
         useMaterial3: true,
+        fontFamily: GoogleFonts.lexend().fontFamily
       ),
       home: const MapScreen(),
     );
@@ -790,7 +793,8 @@ class _MapScreenState extends State<MapScreen> {
           ];
         }
 
-        String hexColor = '#${routeData.color.value.toRadixString(16).substring(2)}';
+        // String hexColor = '#${routeData.color.value.toRadixString(16).substring(2)}';
+        String hexColor = '#42c585';
 
         // Command the GPU to draw the solid jeepney line
         maplibreController?.addLine(maplibre.LineOptions(
@@ -1300,13 +1304,45 @@ class _MapScreenState extends State<MapScreen> {
     if (suggestedRoutes.isEmpty) {
       return [
         const Text(
-          'SUROY TA!',
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor),
+          'Tara, Suroy Ta!',
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor),
         ),
         const SizedBox(height: 10),
-        const Text(
-          'Welcome to SUROY TA! A Public Utility Jeepney (PUJ) Routing and Fare Estimation System design for Davaoeños',
-          style: TextStyle(color: fontColor),
+        // The fixed area that forces the text to adapt
+        SizedBox(
+          height: 40, 
+          child: AutoSizeText(
+            'Welcome to SUROY TA! A Public Utility Jeepney (PUJ) Routing and Fare Estimation System design for Davaoeños',
+            style: const TextStyle(
+              color: fontColor, 
+              fontSize: 16, // The starting maximum size
+              height: 1.2,
+            ),
+            maxLines: 2, 
+            minFontSize: 10, // Prevents it from becoming microscopically small
+            overflow: TextOverflow.ellipsis, // Failsafe
+          ),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          height: 60,
+          padding: const EdgeInsets.all(0),
+          margin: const EdgeInsets.symmetric(horizontal: 0),
+          decoration: BoxDecoration(
+            color: primaryColor,
+            borderRadius: const BorderRadius.all(Radius.circular(20)),
+            
+          ),
+          child: Center(
+            child:Text(
+              "APP INFO",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 30,
+                color: btnColor,
+              ),
+            ),
+          )
         ),
       ];
     } else {
@@ -1327,8 +1363,8 @@ class _MapScreenState extends State<MapScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
-            'Explore Routes',
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor),
+            'Kabalo Ba Ka?',
+            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor),
           ),
           GestureDetector(
             onTap: () {_toggleAllRoutes(false); _isSelectedRoute = false;},
@@ -1378,10 +1414,24 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
       const SizedBox(height: 10),
-      const Text(
+      // const Text(
+      //     'Discover the available jeepney routes in Davao City. Scroll or Search to find your specific route and Tap on the route.',
+      //     style: TextStyle(color: fontColor),
+      //   ),
+      SizedBox(
+        height: 40, 
+        child: AutoSizeText(
           'Discover the available jeepney routes in Davao City. Scroll or Search to find your specific route and Tap on the route.',
-          style: TextStyle(color: fontColor),
+          style: const TextStyle(
+            color: fontColor, 
+            fontSize: 16, // The starting maximum size
+            height: 1.2,
+          ),
+          maxLines: 2, 
+          minFontSize: 10, // Prevents it from becoming microscopically small
+          overflow: TextOverflow.ellipsis, // Failsafe
         ),
+      ),
       const SizedBox(height: 20),
       Container(
         margin: const EdgeInsets.symmetric(horizontal: 5),
@@ -1402,7 +1452,7 @@ class _MapScreenState extends State<MapScreen> {
             filled: true,
             fillColor: fontColor,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none,
             ),
           ),
@@ -1491,13 +1541,27 @@ class _MapScreenState extends State<MapScreen> {
     return [
       const Text(
         'Asa Ta?',
-        style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor),
+        style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor),
       ),
       const SizedBox(height: 10),
-      const Text(
-          'Find the location you wish to go by typing its name or paste its coordinates from external maps.',
-          style: TextStyle(color: fontColor),
+      // const Text(
+      //   'Find the location you wish to go by typing its name or paste its coordinates from external maps.',
+      //   style: TextStyle(color: fontColor),
+      // ),
+      SizedBox(
+        height: 40, 
+        child: AutoSizeText(
+          'Search a location by typing its name or pasting its coordinates from external maps using the Search Bar.',
+          style: const TextStyle(
+            color: fontColor, 
+            fontSize: 16, // The starting maximum size
+            height: 1.2,
+          ),
+          maxLines: 2, 
+          minFontSize: 10, // Prevents it from becoming microscopically small
+          overflow: TextOverflow.ellipsis, // Failsafe
         ),
+      ),
       const SizedBox(height: 20),
       
       // 1. THE DUAL-INPUT SEARCH BAR
@@ -1510,7 +1574,7 @@ class _MapScreenState extends State<MapScreen> {
             filled: true,
             fillColor: fontColor,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none,
             ),
           ),
@@ -1915,7 +1979,8 @@ class _MapScreenState extends State<MapScreen> {
             
             // MapLibre has its own CameraPosition and LatLng classes, so we use our alias
             initialCameraPosition: const maplibre.CameraPosition(
-              target: maplibre.LatLng(7.0700, 125.6000), 
+              // target: maplibre.LatLng(7.0700, 125.6000),
+              target: maplibre.LatLng(7.0640, 125.6080),
               zoom: 14.0,
             ),
             
@@ -1923,7 +1988,7 @@ class _MapScreenState extends State<MapScreen> {
             rotateGesturesEnabled: true,
 
             compassEnabled: true,
-            compassViewMargins: const Point(16, 110),
+            compassViewMargins: const Point(16, 150),
             
             // Grab the controller once the C++ engine is ready
             onMapCreated: (maplibre.MapLibreMapController controller) {
