@@ -1910,7 +1910,8 @@ class _MapScreenState extends State<MapScreen> {
           // Map Section: Displays The Map of Davao City Using MapLibre
           maplibre.MapLibreMap(
             // MapLibre natively takes the MapTiler style URL!
-            styleString: 'https://api.maptiler.com/maps/streets-v4/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
+            // styleString: 'https://api.maptiler.com/maps/streets-v4/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
+            styleString: 'https://api.maptiler.com/maps/019d2d1a-6040-7d1b-be05-18e6303d1ff8/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
             
             // MapLibre has its own CameraPosition and LatLng classes, so we use our alias
             initialCameraPosition: const maplibre.CameraPosition(
