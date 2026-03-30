@@ -749,7 +749,20 @@ class _MapScreenState extends State<MapScreen> {
     await _updateDashedLine('start-walk-source', 'start-walk-layer', []);
     await _updateDashedLine('end-walk-source', 'end-walk-layer', []);
 
+    // --- NEW: Clear the main route and arrows ---
+    await _updateMainRouteWithArrows('main-route-source', 'main-route-line-layer', 'main-route-arrow-layer', [], '#000000');
 
+    // 4. SAFELY CLEAR all Explore Mode lines (This ensures unchecked routes disappear)
+    for (var route in allRoutes) {
+      await _updateMainRouteWithArrows(
+        'explore-source-${route.name}', 
+        'explore-line-${route.name}', 
+        'explore-arrow-${route.name}', 
+        [], 
+        '#FFFFFF'
+      );
+    }
+    
     // --- CONTEXTUAL RENDERING GATEKEEPER ---
     if (_selectedIndex == 0) {
       // ==========================================
@@ -760,12 +773,25 @@ class _MapScreenState extends State<MapScreen> {
       final visibleRoutes = allRoutes.where((r) => r.isVisible && r.polylineData != null);
       for (var route in visibleRoutes) {
         String hexColor = '#${route.color.value.toRadixString(16).substring(2)}';
-        maplibreController?.addLine(maplibre.LineOptions(
-          geometry: route.polylineData!.points.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-          lineColor: hexColor,
-          lineWidth: 4.0,
-          lineOpacity: 1, // Slightly transparent so it doesn't clutter the map
-        ));
+        // maplibreController?.addLine(maplibre.LineOptions(
+        //   geometry: route.polylineData!.points.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
+        //   lineColor: hexColor,
+        //   lineWidth: 4.0,
+        //   lineOpacity: 1, // Slightly transparent so it doesn't clutter the map
+        // ));
+        // Command the GPU to draw the solid jeepney line AND the arrows
+        // Use dynamic IDs based on the route name so they don't overwrite each other!
+        String sourceId = 'explore-source-${route.name}';
+        String lineId = 'explore-line-${route.name}';
+        String arrowId = 'explore-arrow-${route.name}';
+
+        await _updateMainRouteWithArrows(
+          sourceId, 
+          lineId, 
+          arrowId, 
+          route.polylineData!.points, // <-- FIX: Use the full route coordinates here
+          hexColor
+        );
       }
     }else{
       // ==========================================
@@ -828,11 +854,20 @@ class _MapScreenState extends State<MapScreen> {
         String hexColor = '#42c585';
 
         // Command the GPU to draw the solid jeepney line
-        maplibreController?.addLine(maplibre.LineOptions(
-          geometry: ridePoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-          lineColor: hexColor,
-          lineWidth: 6.0,
-        ));
+        // maplibreController?.addLine(maplibre.LineOptions(
+        //   geometry: ridePoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
+        //   lineColor: hexColor,
+        //   lineWidth: 6.0,
+        // ));
+
+        // Command the GPU to draw the solid jeepney line AND the arrows
+        await _updateMainRouteWithArrows(
+          'main-route-source', 
+          'main-route-line-layer', 
+          'main-route-arrow-layer', 
+          ridePoints, 
+          hexColor
+        );
 
         // Draw the Walking Paths (Start and End)
         final startWalkPoints = selectedRoute!.actualWalkPathStart ?? [startPin!, points[selectedRoute!.boardIndex]];
@@ -870,6 +905,12 @@ class _MapScreenState extends State<MapScreen> {
     final ByteData destBytes = await rootBundle.load('assets/images/dest_pin.png');
     final Uint8List destList = destBytes.buffer.asUint8List();
     await maplibreController?.addImage('dest-icon', destList);
+
+    // --- NEW: Load the Directional Arrow ---
+    final ByteData arrowBytes = await rootBundle.load('assets/images/arrow.png'); 
+    final Uint8List arrowList = arrowBytes.buffer.asUint8List();
+    await maplibreController?.addImage('route-arrow', arrowList);
+
   }
 
   List<Widget> _suggestedRoutesSheet(){
@@ -884,9 +925,9 @@ class _MapScreenState extends State<MapScreen> {
       return a.totalEstimatedWalk.compareTo(b.totalEstimatedWalk);
     });
     return [
-        const Text(
+        Text(
           'Suggested Routes',
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor),
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor, fontFamily: GoogleFonts.paytoneOne().fontFamily),
         ),
         const SizedBox(height: 10),
         const Text(
@@ -979,8 +1020,9 @@ class _MapScreenState extends State<MapScreen> {
                                 result.routeName, 
                                 style: TextStyle(
                                   color: fontColor, 
-                                  fontSize: 30, 
-                                  fontFamily: 'Cubao',
+                                  fontSize: 25, 
+                                  // fontFamily: 'Cubao',
+                                  fontFamily: GoogleFonts.paytoneOne().fontFamily,
                                   height: 1.0, // <-- CRITICAL: Removes invisible font padding!
                                   shadows: [
                                     Shadow(
@@ -1128,11 +1170,22 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   const SizedBox(width: 30),
                   GestureDetector(
-                    onTap: () {
+                    onTap: () async {
                       setState(() { _showFloatingCard = false;});
                       if (sheetController.isAttached) {
                         sheetController.animateTo(0.4, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
                       }
+
+                      // 3. THE FIX: Wait for the card to finish sliding off-screen
+                      await Future.delayed(const Duration(milliseconds: 300));
+
+                      // 4. Safely clear the data and redraw the map
+                      // The 'mounted' check is a best practice to ensure the screen still exists
+                      if (mounted) {
+                        setState(() { selectedRoute = null; });
+                        drawMapElements(); // Commands MapLibre to clear the jeepney line
+                      }
+
                     },
                     child: Icon(Icons.close, color: fontColor),
                   )
@@ -2032,7 +2085,7 @@ class _MapScreenState extends State<MapScreen> {
   
   void _showAppInfoModal(BuildContext context) {
     // Temporary local state for the switch (until we wire up Hive)
-    bool tempShowOnStartup = true;
+    bool showOnStartup = _hiveService.getShowInfoOnStartup();
 
     showModalBottomSheet(
       context: context,
@@ -2045,149 +2098,206 @@ class _MapScreenState extends State<MapScreen> {
         // StatefulBuilder is REQUIRED here so the Switch can update its own UI
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            return Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min, // Hugs the content tightly
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 1. THE DRAG HANDLE & HEADER
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 5,
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                  const Text(
-                    'About Suroy Ta',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: primaryColor),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 2. THE FARE MATRIX CARD
-                  Card(
-                    color: btnColor,
-                    elevation: 5,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          const Text(
-                            'LTFRB Fare Matrix',
-                            style: TextStyle(color: fontColor, fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              // Regular Fares
-                              Column(
-                                children: [
-                                  const Text('Regular', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 4),
-                                  Text('Base (4km): ₱${regularBaseFare.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
-                                  Text('Per Km: ₱${regularPerKm.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
-                                ],
-                              ),
-                              Container(width: 1, height: 40, color: Colors.white24), // Subtle Divider
-                              // Discounted Fares
-                              Column(
-                                children: [
-                                  const Text('Discounted', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 4),
-                                  Text('Base (4km): ₱${discountedBaseFare.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
-                                  Text('Per Km: ₱${discountedPerKm.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Effective $fareEffectiveDate',
-                            style: const TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 3. EXPANDABLE: OBJECTIVES
-                  Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent), // Removes default ugly borders
-                    child: ExpansionTile(
-                      iconColor: primaryColor,
-                      collapsedIconColor: fontColor,
-                      title: const Text('Project Objectives', style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
-                      children: const [
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                          child: Text(
-                            'Suroy Ta is designed to help Davaoeños navigate the city effortlessly. Our goal is to provide accurate PUJ routing, real-time fare estimation, and promote an efficient public transportation experience.',
-                            style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+            return FractionallySizedBox(
+              heightFactor: 0.96,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min, // Hugs the content tightly
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 1. THE DRAG HANDLE & HEADER
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 5,
+                          margin: const EdgeInsets.only(bottom: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                      Text(
+                        'About SuroyTa!',
+                        style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor, fontFamily: GoogleFonts.paytoneOne().fontFamily),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
 
-                  // 4. EXPANDABLE: HOW TO USE
-                  Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                    child: ExpansionTile(
-                      iconColor: primaryColor,
-                      collapsedIconColor: fontColor,
-                      title: const Text('How to Use Suroy Ta', style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
-                      children: const [
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      // 2. THE FARE MATRIX CARD
+                      Card(
+                        color: btnColor,
+                        elevation: 5,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('1. Place your Start and Target pins on the map or use the Search tab.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
-                              SizedBox(height: 8),
-                              Text('2. Tap "Find" to generate the best jeepney routes.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
-                              SizedBox(height: 8),
-                              Text('3. Select a route to view your exact walking distance and estimated fare.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                              const Text(
+                                'LTFRB Fare Matrix',
+                                style: TextStyle(color: fontColor, fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  // Regular Fares
+                                  Column(
+                                    children: [
+                                      const Text('Regular', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Text('Base (4km): ₱${regularBaseFare.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
+                                      Text('Per Km: ₱${regularPerKm.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
+                                    ],
+                                  ),
+                                  Container(width: 1, height: 40, color: Colors.white24), // Subtle Divider
+                                  // Discounted Fares
+                                  Column(
+                                    children: [
+                                      const Text('Discounted', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Text('Base (4km): ₱${discountedBaseFare.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
+                                      Text('Per Km: ₱${discountedPerKm.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Effective $fareEffectiveDate',
+                                style: const TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
+                              ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                      ),
+                      const SizedBox(height: 16),
 
-                  // 5. THE STARTUP SWITCH
-                  SwitchListTile(
-                    activeColor: primaryColor,
-                    inactiveThumbColor: primaryColor,
-                    inactiveTrackColor: primaryColor,
-                    title: const Text('Show this on startup', style: TextStyle(color: fontColor, fontSize: 15)),
-                    value: tempShowOnStartup,
-                    onChanged: (bool value) async {
-                      setModalState(() {
-                        tempShowOnStartup = value; // Animates the switch toggle!
-                      });
-                      await _hiveService.toggleShowInfoOnStartup(value);
-                    },
+                      // 3. EXPANDABLE: OBJECTIVES
+                      Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent), // Removes default ugly borders
+                        child: ExpansionTile(
+                          iconColor: primaryColor,
+                          collapsedIconColor: fontColor,
+                          title: const Text('Project Objectives', style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
+                          children: const [
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                              child: Text(
+                                'Suroy Ta is designed to help Davaoeños navigate the city effortlessly. Our goal is to provide accurate PUJ routing, real-time fare estimation, and promote an efficient public transportation experience.',
+                                style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // 4. EXPANDABLE: HOW TO USE
+                      Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          iconColor: primaryColor,
+                          collapsedIconColor: fontColor,
+                          title: const Text('How to Use Suroy Ta', style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
+                          children: const [
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('1. Place your Start and Target pins on the map or use the Search tab.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 8),
+                                  Text('2. Tap "Find" to generate the best jeepney routes.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 8),
+                                  Text('3. Select a route to view your exact walking distance and estimated fare.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 5. THE STARTUP SWITCH
+                      SwitchListTile(
+                        activeColor: primaryColor,
+                        inactiveThumbColor: fontColor,
+                        inactiveTrackColor: sheetBackgroundColor,
+                        title: const Text('Show this on startup', style: TextStyle(color: fontColor, fontSize: 15)),
+                        value: showOnStartup,
+                        onChanged: (bool value) async {
+                          setModalState(() {
+                            showOnStartup = value; // Animates the switch toggle!
+                          });
+                          await _hiveService.toggleShowInfoOnStartup(value);
+                        },
+                      ),
+                      
+                      // SafeArea padding so it doesn't collide with the phone's home swipe bar
+                      const SizedBox(height: 20),
+                    ],
                   ),
-                  
-                  // SafeArea padding so it doesn't collide with the phone's home swipe bar
-                  const SizedBox(height: 20),
-                ],
+                )
               ),
             );
           }
         );
       },
     );
+  }
+  
+  Future<void> _updateMainRouteWithArrows(String sourceId, String lineLayerId, String symbolLayerId, List<LatLng> points, String hexColor) async {
+    // 1. Format the coordinates as a GeoJSON LineString
+    Map<String, dynamic> geoJson = {
+      "type": "FeatureCollection",
+      "features": points.isEmpty ? [] : [
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "LineString",
+            "coordinates": points.map((p) => [p.longitude, p.latitude]).toList()
+          }
+        }
+      ]
+    };
+
+    try {
+      // If the source exists, just update the data (Super fast!)
+      await maplibreController?.setGeoJsonSource(sourceId, geoJson);
+    } catch (e) {
+      // --- THE FIX ---
+      // If the source doesn't exist, and we are just passing an empty array to clear it,
+      // simply return. Do NOT create a ghost layer with a #000000 default color!
+      if (points.isEmpty) return;
+      
+      // If it fails, create the Source and both Layers once
+      await maplibreController?.addSource(sourceId, maplibre.GeojsonSourceProperties(data: geoJson));
+
+      // Layer 1: The Solid Route Line
+      await maplibreController?.addLineLayer(
+        sourceId, 
+        lineLayerId, 
+        maplibre.LineLayerProperties(
+          lineColor: hexColor,
+          lineWidth: 6.0,
+        )
+      );
+
+      // Layer 2: The Directional Arrows tied to the exact same Source
+      await maplibreController?.addSymbolLayer(
+        sourceId, 
+        symbolLayerId, 
+        maplibre.SymbolLayerProperties(
+          symbolPlacement: 'line',         // <-- The Mapbox/MapLibre magic property
+          iconImage: 'route-arrow',        // Matches the ID from _loadCustomPins
+          iconSize: 0.3,                   // Scale your PNG down or up here
+          iconKeepUpright: false,          // Ensures the arrow points along the line, not strictly up
+          symbolSpacing: 100,              // Adds padding between repeating arrows so it isn't cluttered
+        )
+      );
+    }
   }
   
   @override
