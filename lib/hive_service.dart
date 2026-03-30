@@ -4,6 +4,7 @@ import 'models/favorite_location.dart';
 class HiveService {
   // Grab the box we opened in main.dart
   final _locationBox = Hive.box<FavoriteLocation>('locations_box');
+  final _settingsBox = Hive.box('settings_box');
 
   // 1. SAVE A LOCATION
   Future<void> saveLocation(FavoriteLocation location) async {
@@ -33,4 +34,15 @@ class HiveService {
         .map((loc) => loc.id);
     await _locationBox.deleteAll(historyKeys);
   }
+
+  // 1. Read the preference (Defaults to true if the user has never opened the app before)
+  bool getShowInfoOnStartup() {
+    return _settingsBox.get('show_startup_info', defaultValue: true);
+  }
+
+  // 2. Save the preference
+  Future<void> toggleShowInfoOnStartup(bool value) async {
+    await _settingsBox.put('show_startup_info', value);
+  }
+
 }
