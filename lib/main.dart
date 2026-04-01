@@ -27,6 +27,15 @@ const Color deleteColor = Color(0xffdb5f4e);
 const Color darkDeleteColor = Color(0xffa83525);
 const Color disableColor = Color(0xff5d7d7b);
 
+// ==========================================
+// --- GLOBAL APP CONSTANTS (LTFRB FARES) ---
+// ==========================================
+const double regularBaseFare = 13.00;
+const double regularPerKm = 1.80;
+const double discountedBaseFare = 10.40;
+const double discountedPerKm = 1.44;
+const String fareEffectiveDate = "October 8, 2023";
+
 void main() async {
   // Ensure Flutter is ready before reading files
   WidgetsFlutterBinding.ensureInitialized(); 
@@ -43,6 +52,8 @@ void main() async {
   // Open the specific box where we will store the locations
   await Hive.openBox<FavoriteLocation>('locations_box');
 
+  await Hive.openBox('settings_box');
+
   runApp(const SakayTaApp());
 }
 
@@ -57,7 +68,9 @@ class SakayTaApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: btnColor),
         useMaterial3: true,
-        fontFamily: GoogleFonts.lexend().fontFamily
+        // fontFamily: GoogleFonts.lexend().fontFamily OPTION 1
+        fontFamily: GoogleFonts.outfit().fontFamily, //OPTION 2
+        // fontFamily: GoogleFonts.paytoneOne().fontFamily
       ),
       home: const MapScreen(),
     );
@@ -124,10 +137,10 @@ class RouteResult {
   // Safely calculates the discounted fare using the 4km base threshold
   double get estimatedDiscountedFare {
     if (ridingDistanceKm <= 4.0) {
-      return 10.40; // Base fare for first 4km
+      return discountedBaseFare; // Base fare for first 4km
     } else {
       // Base fare + (excess kilometers * 1.44)
-      return 10.40 + ((ridingDistanceKm - 4.0) * 1.44);
+      return discountedBaseFare + ((ridingDistanceKm - 4.0) * discountedPerKm);
     }
   }
 }
@@ -227,9 +240,9 @@ List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
       double ridingDistanceKm = finalRideDistance / 1000.0;
 
       // Base fare logic
-      double fare = 13.0; 
+      double fare = regularBaseFare; 
       if (ridingDistanceKm > 4.0) {
-        fare += (ridingDistanceKm - 4.0) * 1.80; 
+        fare += (ridingDistanceKm - 4.0) * regularPerKm; 
       }
 
       validRoutes.add(
@@ -296,6 +309,15 @@ class _MapScreenState extends State<MapScreen> {
 
     fToast = FToast();
     fToast.init(context);
+
+    // --- THE STARTUP LOGIC ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Ask Hive: Does the user want to see the info?
+      if (_hiveService.getShowInfoOnStartup()) {
+        // If yes (or if it's their very first time), show it!
+        _showAppInfoModal(context);
+      }
+    });
   }
 
   // void _showCustomToast(String message, {IconData? icon}) {
@@ -658,6 +680,15 @@ class _MapScreenState extends State<MapScreen> {
     
     // Note: We don't call setState or drawMapElements() here because 
     // we will call this method *inside* the existing setState blocks of your triggers.
+
+    // --- THE FIX: Hide the sheet if we are currently on the Locate tab ---
+    if (_selectedIndex == 1 && sheetController.isAttached) {
+      sheetController.animateTo(
+        0.0, // Slide completely off-screen
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   Future<void> _updateDashedLine(String sourceId, String layerId, List<LatLng> points) async {
@@ -718,7 +749,20 @@ class _MapScreenState extends State<MapScreen> {
     await _updateDashedLine('start-walk-source', 'start-walk-layer', []);
     await _updateDashedLine('end-walk-source', 'end-walk-layer', []);
 
+    // --- NEW: Clear the main route and arrows ---
+    await _updateMainRouteWithArrows('main-route-source', 'main-route-line-layer', 'main-route-arrow-layer', [], '#000000');
 
+    // 4. SAFELY CLEAR all Explore Mode lines (This ensures unchecked routes disappear)
+    for (var route in allRoutes) {
+      await _updateMainRouteWithArrows(
+        'explore-source-${route.name}', 
+        'explore-line-${route.name}', 
+        'explore-arrow-${route.name}', 
+        [], 
+        '#FFFFFF'
+      );
+    }
+    
     // --- CONTEXTUAL RENDERING GATEKEEPER ---
     if (_selectedIndex == 0) {
       // ==========================================
@@ -729,12 +773,25 @@ class _MapScreenState extends State<MapScreen> {
       final visibleRoutes = allRoutes.where((r) => r.isVisible && r.polylineData != null);
       for (var route in visibleRoutes) {
         String hexColor = '#${route.color.value.toRadixString(16).substring(2)}';
-        maplibreController?.addLine(maplibre.LineOptions(
-          geometry: route.polylineData!.points.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-          lineColor: hexColor,
-          lineWidth: 4.0,
-          lineOpacity: 1, // Slightly transparent so it doesn't clutter the map
-        ));
+        // maplibreController?.addLine(maplibre.LineOptions(
+        //   geometry: route.polylineData!.points.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
+        //   lineColor: hexColor,
+        //   lineWidth: 4.0,
+        //   lineOpacity: 1, // Slightly transparent so it doesn't clutter the map
+        // ));
+        // Command the GPU to draw the solid jeepney line AND the arrows
+        // Use dynamic IDs based on the route name so they don't overwrite each other!
+        String sourceId = 'explore-source-${route.name}';
+        String lineId = 'explore-line-${route.name}';
+        String arrowId = 'explore-arrow-${route.name}';
+
+        await _updateMainRouteWithArrows(
+          sourceId, 
+          lineId, 
+          arrowId, 
+          route.polylineData!.points, // <-- FIX: Use the full route coordinates here
+          hexColor
+        );
       }
     }else{
       // ==========================================
@@ -797,11 +854,20 @@ class _MapScreenState extends State<MapScreen> {
         String hexColor = '#42c585';
 
         // Command the GPU to draw the solid jeepney line
-        maplibreController?.addLine(maplibre.LineOptions(
-          geometry: ridePoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-          lineColor: hexColor,
-          lineWidth: 6.0,
-        ));
+        // maplibreController?.addLine(maplibre.LineOptions(
+        //   geometry: ridePoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
+        //   lineColor: hexColor,
+        //   lineWidth: 6.0,
+        // ));
+
+        // Command the GPU to draw the solid jeepney line AND the arrows
+        await _updateMainRouteWithArrows(
+          'main-route-source', 
+          'main-route-line-layer', 
+          'main-route-arrow-layer', 
+          ridePoints, 
+          hexColor
+        );
 
         // Draw the Walking Paths (Start and End)
         final startWalkPoints = selectedRoute!.actualWalkPathStart ?? [startPin!, points[selectedRoute!.boardIndex]];
@@ -839,6 +905,12 @@ class _MapScreenState extends State<MapScreen> {
     final ByteData destBytes = await rootBundle.load('assets/images/dest_pin.png');
     final Uint8List destList = destBytes.buffer.asUint8List();
     await maplibreController?.addImage('dest-icon', destList);
+
+    // --- NEW: Load the Directional Arrow ---
+    final ByteData arrowBytes = await rootBundle.load('assets/images/arrow.png'); 
+    final Uint8List arrowList = arrowBytes.buffer.asUint8List();
+    await maplibreController?.addImage('route-arrow', arrowList);
+
   }
 
   List<Widget> _suggestedRoutesSheet(){
@@ -853,9 +925,9 @@ class _MapScreenState extends State<MapScreen> {
       return a.totalEstimatedWalk.compareTo(b.totalEstimatedWalk);
     });
     return [
-        const Text(
+        Text(
           'Suggested Routes',
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor),
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor, fontFamily: GoogleFonts.paytoneOne().fontFamily),
         ),
         const SizedBox(height: 10),
         const Text(
@@ -948,8 +1020,9 @@ class _MapScreenState extends State<MapScreen> {
                                 result.routeName, 
                                 style: TextStyle(
                                   color: fontColor, 
-                                  fontSize: 30, 
-                                  fontFamily: 'Cubao',
+                                  fontSize: 25, 
+                                  // fontFamily: 'Cubao',
+                                  fontFamily: GoogleFonts.paytoneOne().fontFamily,
                                   height: 1.0, // <-- CRITICAL: Removes invisible font padding!
                                   shadows: [
                                     Shadow(
@@ -1097,11 +1170,22 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   const SizedBox(width: 30),
                   GestureDetector(
-                    onTap: () {
-                      setState(() { _showFloatingCard = false; });
+                    onTap: () async {
+                      setState(() { _showFloatingCard = false;});
                       if (sheetController.isAttached) {
                         sheetController.animateTo(0.4, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
                       }
+
+                      // 3. THE FIX: Wait for the card to finish sliding off-screen
+                      await Future.delayed(const Duration(milliseconds: 300));
+
+                      // 4. Safely clear the data and redraw the map
+                      // The 'mounted' check is a best practice to ensure the screen still exists
+                      if (mounted) {
+                        setState(() { selectedRoute = null; });
+                        drawMapElements(); // Commands MapLibre to clear the jeepney line
+                      }
+
                     },
                     child: Icon(Icons.close, color: fontColor),
                   )
@@ -1253,14 +1337,31 @@ class _MapScreenState extends State<MapScreen> {
         });
 
         drawMapElements();
+       
+        // if (sheetController.isAttached){
+        //   sheetController.animateTo(
+        //     _selectedIndex == 1 ? 0.26 : 0.96, 
+        //     duration: const Duration(milliseconds: 300), 
+        //     curve: Curves.easeInOut);
+        // }
 
-        // We will add the actual logic (opening sheets, showing search bars) here later!
-        if (sheetController.isAttached){
+        if (sheetController.isAttached) {
+          // --- THE FIX: Smart Sheet Sizing ---
+          double targetSize = 0.96; // Default height for Explore (0) and Search (2)
+          
+          if (_selectedIndex == 1) {
+            // If we are on Locate (1), check if we have routes!
+            // If yes, peek at 0.26. If no, hide completely at 0.0.
+            targetSize = suggestedRoutes.isNotEmpty ? 0.26 : 0.0;
+          }
+
           sheetController.animateTo(
-            _selectedIndex == 1 ? 0.26 : 0.96, 
+            targetSize, 
             duration: const Duration(milliseconds: 300), 
-            curve: Curves.easeInOut);
+            curve: Curves.easeInOut
+          );
         }
+        
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
@@ -1300,55 +1401,55 @@ class _MapScreenState extends State<MapScreen> {
 
   // DRAGGABLE SCROLLABLE SHEET BUILDERS
   // --- LOCATE SHEET CONTENT ---
-  List<Widget> _buildLocateContent() {
-    if (suggestedRoutes.isEmpty) {
-      return [
-        const Text(
-          'Tara, Suroy Ta!',
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor),
-        ),
-        const SizedBox(height: 10),
-        // The fixed area that forces the text to adapt
-        SizedBox(
-          height: 40, 
-          child: AutoSizeText(
-            'Welcome to SUROY TA! A Public Utility Jeepney (PUJ) Routing and Fare Estimation System design for Davaoeños',
-            style: const TextStyle(
-              color: fontColor, 
-              fontSize: 16, // The starting maximum size
-              height: 1.2,
-            ),
-            maxLines: 2, 
-            minFontSize: 10, // Prevents it from becoming microscopically small
-            overflow: TextOverflow.ellipsis, // Failsafe
-          ),
-        ),
-        const SizedBox(height: 20),
-        Container(
-          height: 60,
-          padding: const EdgeInsets.all(0),
-          margin: const EdgeInsets.symmetric(horizontal: 0),
-          decoration: BoxDecoration(
-            color: primaryColor,
-            borderRadius: const BorderRadius.all(Radius.circular(20)),
+  // List<Widget> _buildLocateContent() {
+  //   if (suggestedRoutes.isEmpty) {
+  //     return [
+  //       const Text(
+  //         'Tara, Suroy Ta!',
+  //         style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor),
+  //       ),
+  //       const SizedBox(height: 10),
+  //       // The fixed area that forces the text to adapt
+  //       SizedBox(
+  //         height: 40, 
+  //         child: AutoSizeText(
+  //           'Welcome to SUROY TA! A Public Utility Jeepney (PUJ) Routing and Fare Estimation System design for Davaoeños',
+  //           style: const TextStyle(
+  //             color: fontColor, 
+  //             fontSize: 16, // The starting maximum size
+  //             height: 1.2,
+  //           ),
+  //           maxLines: 2, 
+  //           minFontSize: 10, // Prevents it from becoming microscopically small
+  //           overflow: TextOverflow.ellipsis, // Failsafe
+  //         ),
+  //       ),
+  //       const SizedBox(height: 20),
+  //       Container(
+  //         height: 60,
+  //         padding: const EdgeInsets.all(0),
+  //         margin: const EdgeInsets.symmetric(horizontal: 0),
+  //         decoration: BoxDecoration(
+  //           color: primaryColor,
+  //           borderRadius: const BorderRadius.all(Radius.circular(20)),
             
-          ),
-          child: Center(
-            child:Text(
-              "APP INFO",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 30,
-                color: btnColor,
-              ),
-            ),
-          )
-        ),
-      ];
-    } else {
-      return _suggestedRoutesSheet();
-    }
-  }
+  //         ),
+  //         child: Center(
+  //           child:Text(
+  //             "APP INFO",
+  //             style: TextStyle(
+  //               fontWeight: FontWeight.bold,
+  //               fontSize: 30,
+  //               color: btnColor,
+  //             ),
+  //           ),
+  //         )
+  //       ),
+  //     ];
+  //   } else {
+  //     return _suggestedRoutesSheet();
+  //   }
+  // }
   
   bool _isSelectAllChecked = false;
   bool _isSelectedRoute = false;
@@ -1362,9 +1463,9 @@ class _MapScreenState extends State<MapScreen> {
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
+          Text(
             'Kabalo Ba Ka?',
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor),
+            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor, fontFamily: GoogleFonts.paytoneOne().fontFamily),
           ),
           GestureDetector(
             onTap: () {_toggleAllRoutes(false); _isSelectedRoute = false;},
@@ -1539,9 +1640,9 @@ class _MapScreenState extends State<MapScreen> {
     final favoritesList = _hiveService.getFavorites();
 
     return [
-      const Text(
+      Text(
         'Asa Ta?',
-        style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor),
+        style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor, fontFamily: GoogleFonts.paytoneOne().fontFamily),
       ),
       const SizedBox(height: 10),
       // const Text(
@@ -1763,23 +1864,42 @@ class _MapScreenState extends State<MapScreen> {
           )
         ],
       ),
-      child: Center(
-          child:Text(
-          "SUROY TA!",
-          style: TextStyle(
-            fontFamily: 'Cubao',
-            fontSize: 30,
-            color: fontColor,
-            shadows: [
-              Shadow(
-                offset: Offset(1, 4),
-                blurRadius: 7,
-                color: Colors.black.withOpacity(0.5)
-              )
-            ]
+      child: Stack(
+        children: [
+          Center(
+              child:Text(
+              "SUROY TA!",
+              style: TextStyle(
+                fontFamily: 'Cubao',
+                fontSize: 30,
+                color: fontColor,
+                shadows: [
+                  Shadow(
+                    offset: Offset(1, 4),
+                    blurRadius: 7,
+                    color: Colors.black.withOpacity(0.5)
+                  )
+                ]
+              ),
+            ),
           ),
-        ),
-      )
+          // 2. The Help Icon pinned to the right edge
+          Positioned(
+            right: 10.0, // Gives it a little breathing room from the edge
+            top: 0,
+            bottom: 0,
+            child: IconButton(
+              icon: const Icon(Icons.help_outline, color: fontColor, size: 25),
+              onPressed: () {
+                // We will trigger the Modal Bottom Sheet here in the next step!
+                // debugPrint("Help icon tapped!");
+                _showAppInfoModal(context); 
+              },
+            ),
+          ),
+        ],
+      ) 
+      
     );
   }
   
@@ -1961,6 +2081,223 @@ class _MapScreenState extends State<MapScreen> {
         }
       )
     );
+  }
+  
+  void _showAppInfoModal(BuildContext context) {
+    // Temporary local state for the switch (until we wire up Hive)
+    bool showOnStartup = _hiveService.getShowInfoOnStartup();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // Allows the sheet to size itself perfectly to the content
+      backgroundColor: sheetBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext context) {
+        // StatefulBuilder is REQUIRED here so the Switch can update its own UI
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return FractionallySizedBox(
+              heightFactor: 0.96,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min, // Hugs the content tightly
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 1. THE DRAG HANDLE & HEADER
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 5,
+                          margin: const EdgeInsets.only(bottom: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'About SuroyTa!',
+                        style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor, fontFamily: GoogleFonts.paytoneOne().fontFamily),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+
+                      // 2. THE FARE MATRIX CARD
+                      Card(
+                        color: btnColor,
+                        elevation: 5,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'LTFRB Fare Matrix',
+                                style: TextStyle(color: fontColor, fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  // Regular Fares
+                                  Column(
+                                    children: [
+                                      const Text('Regular', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Text('Base (4km): ₱${regularBaseFare.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
+                                      Text('Per Km: ₱${regularPerKm.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
+                                    ],
+                                  ),
+                                  Container(width: 1, height: 40, color: Colors.white24), // Subtle Divider
+                                  // Discounted Fares
+                                  Column(
+                                    children: [
+                                      const Text('Discounted', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Text('Base (4km): ₱${discountedBaseFare.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
+                                      Text('Per Km: ₱${discountedPerKm.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Effective $fareEffectiveDate',
+                                style: const TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 3. EXPANDABLE: OBJECTIVES
+                      Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent), // Removes default ugly borders
+                        child: ExpansionTile(
+                          iconColor: primaryColor,
+                          collapsedIconColor: fontColor,
+                          title: const Text('Project Objectives', style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
+                          children: const [
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                              child: Text(
+                                'Suroy Ta is designed to help Davaoeños navigate the city effortlessly. Our goal is to provide accurate PUJ routing, real-time fare estimation, and promote an efficient public transportation experience.',
+                                style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // 4. EXPANDABLE: HOW TO USE
+                      Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          iconColor: primaryColor,
+                          collapsedIconColor: fontColor,
+                          title: const Text('How to Use Suroy Ta', style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
+                          children: const [
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('1. Place your Start and Target pins on the map or use the Search tab.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 8),
+                                  Text('2. Tap "Find" to generate the best jeepney routes.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 8),
+                                  Text('3. Select a route to view your exact walking distance and estimated fare.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 5. THE STARTUP SWITCH
+                      SwitchListTile(
+                        activeColor: primaryColor,
+                        inactiveThumbColor: fontColor,
+                        inactiveTrackColor: sheetBackgroundColor,
+                        title: const Text('Show this on startup', style: TextStyle(color: fontColor, fontSize: 15)),
+                        value: showOnStartup,
+                        onChanged: (bool value) async {
+                          setModalState(() {
+                            showOnStartup = value; // Animates the switch toggle!
+                          });
+                          await _hiveService.toggleShowInfoOnStartup(value);
+                        },
+                      ),
+                      
+                      // SafeArea padding so it doesn't collide with the phone's home swipe bar
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                )
+              ),
+            );
+          }
+        );
+      },
+    );
+  }
+  
+  Future<void> _updateMainRouteWithArrows(String sourceId, String lineLayerId, String symbolLayerId, List<LatLng> points, String hexColor) async {
+    // 1. Format the coordinates as a GeoJSON LineString
+    Map<String, dynamic> geoJson = {
+      "type": "FeatureCollection",
+      "features": points.isEmpty ? [] : [
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "LineString",
+            "coordinates": points.map((p) => [p.longitude, p.latitude]).toList()
+          }
+        }
+      ]
+    };
+
+    try {
+      // If the source exists, just update the data (Super fast!)
+      await maplibreController?.setGeoJsonSource(sourceId, geoJson);
+    } catch (e) {
+      // --- THE FIX ---
+      // If the source doesn't exist, and we are just passing an empty array to clear it,
+      // simply return. Do NOT create a ghost layer with a #000000 default color!
+      if (points.isEmpty) return;
+      
+      // If it fails, create the Source and both Layers once
+      await maplibreController?.addSource(sourceId, maplibre.GeojsonSourceProperties(data: geoJson));
+
+      // Layer 1: The Solid Route Line
+      await maplibreController?.addLineLayer(
+        sourceId, 
+        lineLayerId, 
+        maplibre.LineLayerProperties(
+          lineColor: hexColor,
+          lineWidth: 6.0,
+        )
+      );
+
+      // Layer 2: The Directional Arrows tied to the exact same Source
+      await maplibreController?.addSymbolLayer(
+        sourceId, 
+        symbolLayerId, 
+        maplibre.SymbolLayerProperties(
+          symbolPlacement: 'line',         // <-- The Mapbox/MapLibre magic property
+          iconImage: 'route-arrow',        // Matches the ID from _loadCustomPins
+          iconSize: 0.3,                   // Scale your PNG down or up here
+          iconKeepUpright: false,          // Ensures the arrow points along the line, not strictly up
+          symbolSpacing: 100,              // Adds padding between repeating arrows so it isn't cluttered
+        )
+      );
+    }
   }
   
   @override
@@ -2230,7 +2567,7 @@ class _MapScreenState extends State<MapScreen> {
           // The Swipe-Up Bottom Sheet
           DraggableScrollableSheet(
             controller: sheetController, // Attached the remote control here
-            initialChildSize: 0.96, 
+            initialChildSize: 0.0, 
             minChildSize: 0.0,     
             maxChildSize: 0.96,
             snap: true,
@@ -2259,7 +2596,8 @@ class _MapScreenState extends State<MapScreen> {
                     ),
 
                     if(_selectedIndex == 0) ..._buildExploreContent(),
-                    if(_selectedIndex == 1) ..._buildLocateContent(),
+                    // if(_selectedIndex == 1) ..._buildLocateContent(),
+                    if(_selectedIndex == 1 && suggestedRoutes.isNotEmpty) ..._suggestedRoutesSheet(),
                     if(_selectedIndex == 2) ..._buildSearchContent(),
 
                   ],
