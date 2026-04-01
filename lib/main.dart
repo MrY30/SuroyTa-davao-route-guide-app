@@ -26,6 +26,10 @@ import 'models/route_result.dart';
 import 'services/osrm_service.dart';
 import 'core/route_math.dart';
 
+// PHASE 3
+import 'ui/widgets/floating_route_card.dart';
+import 'ui/widgets/custom_pin_button.dart';
+
 void main() async {
   // Ensure Flutter is ready before reading files
   WidgetsFlutterBinding.ensureInitialized(); 
@@ -67,8 +71,6 @@ class SakayTaApp extends StatelessWidget {
   }
 }
 
-
-
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -76,9 +78,7 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-
 enum PinMode { none, start, destination }
-
 PinMode currentPinMode = PinMode.none;
 LatLng? startPin;
 LatLng? destinationPin;
@@ -781,265 +781,6 @@ class _MapScreenState extends State<MapScreen> {
       ),
       const SizedBox(height: 80,)
     ];
-  }
-  
-  Widget _buildFloatingRouteDetails() {
-    if (selectedRoute == null) return const SizedBox.shrink();
-
-    // 1. Calculate combined walking distance
-    final totalStartWalk = selectedRoute!.actualStartWalk ?? selectedRoute!.estimatedStartWalk;
-    final totalEndWalk = selectedRoute!.actualEndWalk ?? selectedRoute!.estimatedEndWalk;
-    final totalWalk = totalStartWalk + totalEndWalk;
-    
-    // Only show '~' if we are still relying on estimates
-    final isExactWalk = selectedRoute!.actualStartWalk != null && selectedRoute!.actualEndWalk != null;
-    final walkPrefix = isExactWalk ? '' : '~';
-    final walkText = '$walkPrefix${totalWalk.toStringAsFixed(0)}m';
-
-    // 2. Format texts
-    final rideDistanceText = '${selectedRoute!.ridingDistanceKm.toStringAsFixed(1)}km';
-    final regularFareText = '₱ ${selectedRoute!.estimatedFare.toStringAsFixed(2)}';
-    final discountedFareText = '₱ ${selectedRoute!.estimatedDiscountedFare.toStringAsFixed(2)}';
-
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutBack,
-      top: (_showFloatingCard && _selectedIndex == 1) ? 40.0 : -200.0, 
-      left: 0,
-      right: 0,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 15),
-        // Removed the global padding here to allow for the two-tone split!
-        decoration: BoxDecoration(
-          color: btnColor, 
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              offset: const Offset(0, 10),
-              blurRadius: 20
-            )
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min, 
-          crossAxisAlignment: CrossAxisAlignment.stretch, // Stretches children horizontally
-          children: [
-            // ==========================================
-            // TOP ROW: Route Name & Close Button
-            // ==========================================
-            Padding(
-              padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Stack(
-                        children: [
-                          // Transform.translate(
-                          //   offset: const Offset(1, 9), 
-                          //   child: Text(
-                          //     selectedRoute!.routeName,
-                          //     style: TextStyle(
-                          //       fontSize: 45, 
-                          //       fontFamily: 'Cubao',
-                          //       foreground: Paint()
-                          //         ..style = PaintingStyle.stroke
-                          //         ..strokeWidth = 12.0 
-                          //         ..color = Colors.black.withOpacity(0.6) 
-                          //         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0), 
-                          //     ),
-                          //   ),
-                          // ),
-                          // Text(
-                          //   selectedRoute!.routeName,
-                          //   style: TextStyle(
-                          //     fontSize: 45, 
-                          //     fontFamily: 'Cubao',
-                          //     foreground: Paint()
-                          //       ..style = PaintingStyle.stroke
-                          //       ..strokeWidth = 12.0 
-                          //       ..color = primaryColor, 
-                          //   ),
-                          // ),
-                          Text(
-                            selectedRoute!.routeName,
-                            style: TextStyle(
-                              fontSize: 45, 
-                              fontFamily: 'Cubao',
-                              color: primaryColor,
-                              shadows: [
-                                Shadow(
-                                  offset: Offset(1, 4),
-                                  blurRadius: 7,
-                                  color: Colors.black.withOpacity(0.5)
-                                )
-                              ] 
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  ),
-                  const SizedBox(width: 30),
-                  GestureDetector(
-                    onTap: () async {
-                      setState(() { _showFloatingCard = false;});
-                      if (sheetController.isAttached) {
-                        sheetController.animateTo(0.4, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                      }
-
-                      // 3. THE FIX: Wait for the card to finish sliding off-screen
-                      await Future.delayed(const Duration(milliseconds: 300));
-
-                      // 4. Safely clear the data and redraw the map
-                      // The 'mounted' check is a best practice to ensure the screen still exists
-                      if (mounted) {
-                        setState(() { selectedRoute = null; });
-                        drawMapElements(); // Commands MapLibre to clear the jeepney line
-                      }
-
-                    },
-                    child: Icon(Icons.close, color: fontColor),
-                  )
-                ],
-              ),
-            ),
-            
-            // ==========================================
-            // BOTTOM ROW: Distances and Fares (Dual-Tone effect)
-            // ==========================================
-            Container(
-              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20, top: 0),
-              // decoration: BoxDecoration(
-              //   // Adds a subtle dark overlay to create the two-tone visual hierarchy
-              //   color: Colors.black.withOpacity(0.15), 
-              //   borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
-              // ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // --- LEFT: Distances ---
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.directions_walk, color: fontColor, size: 18),
-                          const SizedBox(width: 6),
-                          Text(walkText, style: TextStyle(color: fontColor, fontSize: 15)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.directions_bus, color: fontColor, size: 18), // Change to Icons.airport_shuttle if you prefer!
-                          const SizedBox(width: 6),
-                          Text(rideDistanceText, style: TextStyle(color: fontColor, fontSize: 15)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  
-                  // --- RIGHT: Fares ---
-                  Row(
-                    children: [
-                      // Discounted Fare Column
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Discounted', style: TextStyle(color: fontColor.withOpacity(0.8), fontSize: 12)),
-                          Text(
-                            discountedFareText,
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: fontColor),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 25),
-                      // Regular Fare Column
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Regular', style: TextStyle(color: fontColor.withOpacity(0.8), fontSize: 12)),
-                          Text(
-                            regularFareText,
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: fontColor),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  // --- NEW LOGIC: A reusable button builder ---
-  Widget _buildPinButton({
-    required String label,
-    required String imagePath,
-    required PinMode mode,
-    required LatLng? pinData,
-    required VoidCallback onTap,
-  }) {
-      bool isSelecting = currentPinMode == mode;
-      bool isPlaced = pinData != null;
-
-      Color bgColor = btnColor;
-      Color txtColor = fontColor;
-      Widget trailingIcon = const SizedBox.shrink();
-
-      // The 3-State Visual Logic
-      if (isPlaced) {
-        bgColor = primaryColor; // STATE 3: Placed (Solid Primary Color)
-        txtColor = fontColor;
-        // Add a tiny checkmark to really sell the "Placed" state
-        trailingIcon = const Padding(
-          padding: EdgeInsets.only(left: 4), 
-          child: Icon(Icons.check_circle, color: Colors.white, size: 16)
-        );
-      } else if (isSelecting) {
-        bgColor = disableColor; // STATE 2: Selecting (Dimmed/Pulsing)
-        txtColor = fontColor;
-      } 
-    // Otherwise, it falls back to STATE 1: Idle (btnColor)
-
-    return SizedBox(
-      width: 120, // Slightly wider to accommodate the new checkmark
-      height: 40,
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: bgColor,
-          foregroundColor: txtColor,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          elevation: isPlaced ? 6 : (isSelecting ? 0 : 2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            Image.asset(imagePath, width: 24, height: 24),
-            const SizedBox(width: 6),
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              ),
-            ),
-            trailingIcon, 
-          ],
-        ),
-      ),
-    );
   }
 
   // --- NEW LOGIC: Custom Navigation Button ---
@@ -2051,7 +1792,27 @@ class _MapScreenState extends State<MapScreen> {
                 ),
           ),
  
-          _buildFloatingRouteDetails(),
+          // _buildFloatingRouteDetails(),
+          FloatingRouteCard(
+            route: selectedRoute,
+            isVisible: (_showFloatingCard && _selectedIndex == 1), 
+            onClose: () async {
+              setState(() { _showFloatingCard = false;});
+              if (sheetController.isAttached) {
+                sheetController.animateTo(0.4, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+              }
+
+              // 3. THE FIX: Wait for the card to finish sliding off-screen
+              await Future.delayed(const Duration(milliseconds: 300));
+
+              // 4. Safely clear the data and redraw the map
+              // The 'mounted' check is a best practice to ensure the screen still exists
+              if (mounted) {
+                setState(() { selectedRoute = null; });
+                drawMapElements(); // Commands MapLibre to clear the jeepney line
+              }
+            }
+          ),
 
           // Dynamic Floating Buttons (Start & Target Pins on the Left, GPS & Find on the Right)
           AnimatedBuilder(
@@ -2097,10 +1858,11 @@ class _MapScreenState extends State<MapScreen> {
                         // --- LEFT SIDE: Start & Target Buttons ---
                         Row(
                           children: [
-                            _buildPinButton(
+                            CustomPinButton(
                               label: 'Start', 
                               imagePath: 'assets/images/start_pin.png', 
                               mode: PinMode.start,
+                              currentMode: currentPinMode,
                               pinData: startPin,
                               onTap: (){
                                 setState(() {
@@ -2123,10 +1885,11 @@ class _MapScreenState extends State<MapScreen> {
                               }
                             ),
                             const SizedBox(width: 10),
-                            _buildPinButton(
+                            CustomPinButton(
                               label: 'Target', 
                               imagePath: 'assets/images/dest_pin.png', 
                               mode: PinMode.destination,
+                              currentMode: currentPinMode,
                               pinData: destinationPin,
                               onTap: (){
                                 setState(() {
