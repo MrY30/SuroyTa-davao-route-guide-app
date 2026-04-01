@@ -1,5 +1,5 @@
 import 'package:hive/hive.dart';
-import 'models/favorite_location.dart';
+import '../models/favorite_location.dart';
 
 class HiveService {
   // Grab the box we opened in main.dart

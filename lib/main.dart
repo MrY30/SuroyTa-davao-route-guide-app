@@ -11,30 +11,15 @@ import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
 import 'dart:math';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'models/favorite_location.dart';
-import 'hive_service.dart';
+import 'services/hive_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// NOT SO FINAL COLORS
-const Color primaryColor = Color(0xFF42c585);
-const Color fontColor = Color(0xfff9f5f0);
-const Color btnColor = Color(0xff184a46);
-const Color sheetBackgroundColor = Color(0xff1f2730);
-const Color unselectedNavColor = Color(0xff9bb2a7);
-const Color cardColor = Color(0xff374656);
-const Color deleteColor = Color(0xffdb5f4e);
-const Color darkDeleteColor = Color(0xffa83525);
-const Color disableColor = Color(0xff5d7d7b);
-
-// ==========================================
-// --- GLOBAL APP CONSTANTS (LTFRB FARES) ---
-// ==========================================
-const double regularBaseFare = 13.00;
-const double regularPerKm = 1.80;
-const double discountedBaseFare = 10.40;
-const double discountedPerKm = 1.44;
-const String fareEffectiveDate = "October 8, 2023";
+// LOCAL IMPORTS
+import 'core/constants.dart';
+import 'models/jeepney_route.dart';
+import 'models/route_result.dart';
 
 void main() async {
   // Ensure Flutter is ready before reading files
@@ -77,21 +62,7 @@ class SakayTaApp extends StatelessWidget {
   }
 }
 
-// 1. The Data Model (Unchanged)
-class JeepneyRoute {
-  final String name;
-  final String filePath;
-  final Color color;
-  bool isVisible;
-  Polyline? polylineData;
 
-  JeepneyRoute({
-    required this.name,
-    required this.filePath,
-    required this.color,
-    this.isVisible = false,
-  });
-}
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -102,48 +73,7 @@ class MapScreen extends StatefulWidget {
 
 // ALGORITHM HERE
 // 1. A clean data class to hold our successful results
-class RouteResult {
-  final String routeName;
-  final double estimatedStartWalk; // Split from total
-  final double estimatedEndWalk;   // Split from total
-  final int boardIndex; 
-  final int alightIndex; 
-  
-  // --- THE NEW MATH PROPERTIES ---
-  final double ridingDistanceKm; 
-  final double estimatedFare;
 
-  // --- OSRM PROPERTIES ---
-  double? actualStartWalk; // Split from total
-  double? actualEndWalk;   // Split from total
-  List<LatLng>? actualWalkPathStart; 
-  List<LatLng>? actualWalkPathEnd; 
-  bool isFetchingActualRoute = false; 
-
-  RouteResult({
-    required this.routeName,
-    required this.estimatedStartWalk,
-    required this.estimatedEndWalk,
-    required this.boardIndex,
-    required this.alightIndex,
-    required this.ridingDistanceKm,
-    required this.estimatedFare,
-  });
-
-  // A helper getter so we can still easily sort the list by the shortest overall walk
-  double get totalEstimatedWalk => estimatedStartWalk + estimatedEndWalk;
-
-  // --- THE NEW MATH PROPERTY ---
-  // Safely calculates the discounted fare using the 4km base threshold
-  double get estimatedDiscountedFare {
-    if (ridingDistanceKm <= 4.0) {
-      return discountedBaseFare; // Base fare for first 4km
-    } else {
-      // Base fare + (excess kilometers * 1.44)
-      return discountedBaseFare + ((ridingDistanceKm - 4.0) * discountedPerKm);
-    }
-  }
-}
 
 // 2. The Isolate Function (Must be top-level, outside your classes)
 // It accepts a map containing the start pin, dest pin, and all route coordinates.
