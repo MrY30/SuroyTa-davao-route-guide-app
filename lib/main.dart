@@ -18,17 +18,21 @@ import 'package:google_fonts/google_fonts.dart';
 
 // LOCAL IMPORTS
 // PHASE 1
-import 'core/constants.dart';
-import 'models/jeepney_route.dart';
-import 'models/route_result.dart';
+import 'package:sakay_ta_mobile_app/core/constants.dart';
+import 'package:sakay_ta_mobile_app/models/jeepney_route.dart';
+import 'package:sakay_ta_mobile_app/models/route_result.dart';
 
 // PHASE 2
-import 'services/osrm_service.dart';
-import 'core/route_math.dart';
+import 'package:sakay_ta_mobile_app/services/osrm_service.dart';
+import 'package:sakay_ta_mobile_app/core/route_math.dart';
 
 // PHASE 3
-import 'ui/widgets/floating_route_card.dart';
-import 'ui/widgets/custom_pin_button.dart';
+import 'package:sakay_ta_mobile_app/ui/widgets/floating_route_card.dart';
+import 'package:sakay_ta_mobile_app/ui/widgets/custom_pin_button.dart';
+
+// PHASE 3 PART 2
+import 'package:sakay_ta_mobile_app/ui/widgets/app_header.dart';
+import 'package:sakay_ta_mobile_app/ui/widgets/custom_navigation.dart';
 
 void main() async {
   // Ensure Flutter is ready before reading files
@@ -489,12 +493,7 @@ class _MapScreenState extends State<MapScreen> {
       final visibleRoutes = allRoutes.where((r) => r.isVisible && r.polylineData != null);
       for (var route in visibleRoutes) {
         String hexColor = '#${route.color.value.toRadixString(16).substring(2)}';
-        // maplibreController?.addLine(maplibre.LineOptions(
-        //   geometry: route.polylineData!.points.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-        //   lineColor: hexColor,
-        //   lineWidth: 4.0,
-        //   lineOpacity: 1, // Slightly transparent so it doesn't clutter the map
-        // ));
+
         // Command the GPU to draw the solid jeepney line AND the arrows
         // Use dynamic IDs based on the route name so they don't overwrite each other!
         String sourceId = 'explore-source-${route.name}';
@@ -535,21 +534,6 @@ class _MapScreenState extends State<MapScreen> {
         ));
       }
 
-      // 🔍 DEBUG: Only selected route points
-      // if (selectedRoute != null) {
-      //   final routeData = allRoutes.firstWhere((r) => r.name == selectedRoute!.routeName);
-
-      //   for (var point in routeData.polylineData!.points) {
-      //     maplibreController?.addCircle(
-      //       maplibre.CircleOptions(
-      //         geometry: maplibre.LatLng(point.latitude, point.longitude),
-      //         circleRadius: 3.0,
-      //         circleColor: "#0000FF", // blue
-      //       ),
-      //     );
-      //   }
-      // }
-
       // 3. Draw the Selected Route
       if (selectedRoute != null && startPin != null && destinationPin != null) {
         final routeData = allRoutes.firstWhere((r) => r.name == selectedRoute!.routeName);
@@ -569,13 +553,6 @@ class _MapScreenState extends State<MapScreen> {
         // String hexColor = '#${routeData.color.value.toRadixString(16).substring(2)}';
         String hexColor = '#42c585';
 
-        // Command the GPU to draw the solid jeepney line
-        // maplibreController?.addLine(maplibre.LineOptions(
-        //   geometry: ridePoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-        //   lineColor: hexColor,
-        //   lineWidth: 6.0,
-        // ));
-
         // Command the GPU to draw the solid jeepney line AND the arrows
         await _updateMainRouteWithArrows(
           'main-route-source', 
@@ -591,20 +568,6 @@ class _MapScreenState extends State<MapScreen> {
 
         await _updateDashedLine('start-walk-source', 'start-walk-layer', startWalkPoints);
         await _updateDashedLine('end-walk-source', 'end-walk-layer', endWalkPoints);
-        
-        // Walk to Jeepney
-        // maplibreController?.addLine(maplibre.LineOptions(
-        //   geometry: startWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-        //   lineColor: '#000000', // Black
-        //   lineWidth: 3.0,
-        // ));
-
-        // Walk to Destination
-        // maplibreController?.addLine(maplibre.LineOptions(
-        //   geometry: endWalkPoints.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList(),
-        //   lineColor: '#000000',
-        //   lineWidth: 3.0,
-        // ));
 
       }
     }
@@ -781,79 +744,6 @@ class _MapScreenState extends State<MapScreen> {
       ),
       const SizedBox(height: 80,)
     ];
-  }
-
-  // --- NEW LOGIC: Custom Navigation Button ---
-  Widget _buildNavItem({required IconData icon, required String label, required int index}) {
-    bool isSelected = _selectedIndex == index;
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedIndex = index;
-        });
-
-        drawMapElements();
-       
-        // if (sheetController.isAttached){
-        //   sheetController.animateTo(
-        //     _selectedIndex == 1 ? 0.26 : 0.96, 
-        //     duration: const Duration(milliseconds: 300), 
-        //     curve: Curves.easeInOut);
-        // }
-
-        if (sheetController.isAttached) {
-          // --- THE FIX: Smart Sheet Sizing ---
-          double targetSize = 0.96; // Default height for Explore (0) and Search (2)
-          
-          if (_selectedIndex == 1) {
-            // If we are on Locate (1), check if we have routes!
-            // If yes, peek at 0.26. If no, hide completely at 0.0.
-            targetSize = suggestedRoutes.isNotEmpty ? 0.26 : 0.0;
-          }
-
-          sheetController.animateTo(
-            targetSize, 
-            duration: const Duration(milliseconds: 300), 
-            curve: Curves.easeInOut
-          );
-        }
-        
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-        width: 123,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          // Replace Colors.purpleAccent with your 'selectedColor' variable
-          color: isSelected ? primaryColor.withOpacity(0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          //border: Border.all(color: Colors.black)
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min, // Wrap tightly around the icon
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? fontColor : unselectedNavColor, // Active vs Inactive colors
-              size: 30,
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 0),
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? fontColor : unselectedNavColor,
-                  fontSize: 10,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-            )
-          ],
-        ),
-      ),
-      );
   }
 
   bool _isSelectAllChecked = false;
@@ -1251,61 +1141,6 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
     return null; // No match found
-  }
-
-  // WIDGET CENTER:
-  Widget _buildHeaderWidget(){
-    return Container(
-      height: 62,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: btnColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: btnColor.withOpacity(0.3),
-            offset: Offset(0, 20),
-            blurRadius: 20
-          )
-        ],
-      ),
-      child: Stack(
-        children: [
-          Center(
-              child:Text(
-              "SUROY TA!",
-              style: TextStyle(
-                fontFamily: 'Cubao',
-                fontSize: 30,
-                color: fontColor,
-                shadows: [
-                  Shadow(
-                    offset: Offset(1, 4),
-                    blurRadius: 7,
-                    color: Colors.black.withOpacity(0.5)
-                  )
-                ]
-              ),
-            ),
-          ),
-          // 2. The Help Icon pinned to the right edge
-          Positioned(
-            right: 10.0, // Gives it a little breathing room from the edge
-            top: 0,
-            bottom: 0,
-            child: IconButton(
-              icon: const Icon(Icons.help_outline, color: fontColor, size: 25),
-              onPressed: () {
-                // We will trigger the Modal Bottom Sheet here in the next step!
-                // debugPrint("Help icon tapped!");
-                _showAppInfoModal(context); 
-              },
-            ),
-          ),
-        ],
-      ) 
-      
-    );
   }
   
   Widget _buildLegendWidget(){
@@ -1705,6 +1540,37 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
   
+  void _handleTabChanged(int targetIndex) {                 
+    setState(() {
+      _selectedIndex = targetIndex;
+    });
+
+    drawMapElements();
+
+    // if (sheetController.isAttached){
+    //   sheetController.animateTo(
+    //     _selectedIndex == 1 ? 0.26 : 0.96, 
+    //     duration: const Duration(milliseconds: 300), 
+    //     curve: Curves.easeInOut);
+    // }
+
+    if (sheetController.isAttached) {
+      double targetSize = 0.96; // Default height for Explore (0) and Search (2)
+      
+      if (_selectedIndex == 1) {
+        // If we are on Locate (1), check if we have routes!
+        // If yes, peek at 0.26. If no, hide completely at 0.0.
+        targetSize = suggestedRoutes.isNotEmpty ? 0.26 : 0.0;
+      }
+
+      sheetController.animateTo(
+        targetSize, 
+        duration: const Duration(milliseconds: 300), 
+        curve: Curves.easeInOut
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1781,7 +1647,14 @@ class _MapScreenState extends State<MapScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // --- App Header: Displays "SUROY TA!" which is the name of the app ---
-                      _buildHeaderWidget(),
+                      // _buildHeaderWidget(),
+                      AppHeader(
+                        onClick: () {
+                          // We will trigger the Modal Bottom Sheet here in the next step!
+                          // debugPrint("Help icon tapped!");
+                          _showAppInfoModal(context); 
+                        }
+                      ),
                       const SizedBox(height: 8),
                       // --- Legend for Explore tab: Displays the selected routes to Explore its coverage ---
                       _buildLegendWidget(),
@@ -2160,9 +2033,30 @@ class _MapScreenState extends State<MapScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildNavItem(icon: Icons.map_outlined, label: "Explore", index: 0),
-              _buildNavItem(icon: Icons.location_on, label: "Locate", index: 1),
-              _buildNavItem(icon: Icons.search, label: "Search", index: 2),
+              // _buildNavItem(icon: Icons.map_outlined, label: "Explore", index: 0),
+              // _buildNavItem(icon: Icons.location_on, label: "Locate", index: 1),
+              // _buildNavItem(icon: Icons.search, label: "Search", index: 2),
+              CustomNavigation(
+                icon: Icons.map_outlined, 
+                label: "Explore", 
+                index: 0,
+                selectedIndex: _selectedIndex, 
+                onTap: () => _handleTabChanged(0)
+              ),
+              CustomNavigation(
+                icon: Icons.location_on, 
+                label: "Locate", 
+                index: 1,
+                selectedIndex: _selectedIndex, 
+                onTap: () => _handleTabChanged(1)
+              ),
+              CustomNavigation(
+                icon: Icons.search, 
+                label: "Search", 
+                index: 2,
+                selectedIndex: _selectedIndex, 
+                onTap: () => _handleTabChanged(2)
+              )
             ],
           )
         ),
