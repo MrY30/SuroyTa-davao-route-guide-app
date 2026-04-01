@@ -17,9 +17,14 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // LOCAL IMPORTS
+// PHASE 1
 import 'core/constants.dart';
 import 'models/jeepney_route.dart';
 import 'models/route_result.dart';
+
+// PHASE 2
+import 'services/osrm_service.dart';
+import 'core/route_math.dart';
 
 void main() async {
   // Ensure Flutter is ready before reading files
@@ -71,138 +76,9 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-// ALGORITHM HERE
-// 1. A clean data class to hold our successful results
 
-
-// 2. The Isolate Function (Must be top-level, outside your classes)
-// It accepts a map containing the start pin, dest pin, and all route coordinates.
-List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
-  final LatLng start = data['start'];
-  final LatLng dest = data['dest'];
-  final Map<String, List<LatLng>> allRouteCoordinates = data['routes'];
-
-  final Distance haversine = const Distance();
-  List<RouteResult> validRoutes = [];
-
-  // ==========================================
-  // THE COST FUNCTION DIALS
-  // Tweak these to change how "lazy" the algorithm is!
-  // ==========================================
-  const double walkMultiplier = 15.0; // 1m of walking adds 15 penalty points
-  const double rideMultiplier = 1.0;  // 1m of riding adds 1 penalty point
-  const double minRideDistance = 200.0; // Ignore rides shorter than 200m
-
-  allRouteCoordinates.forEach((routeName, coordinates) {
-    if (coordinates.isEmpty) return; 
-
-    // 1. PRE-CALCULATE: Cumulative Distances (Speeds up the math massively)
-    List<double> cumulativeDistances = [0.0];
-    double totalRouteDistance = 0.0;
-    for (int i = 0; i < coordinates.length - 1; i++) {
-      totalRouteDistance += haversine.as(LengthUnit.Meter, coordinates[i], coordinates[i+1]);
-      cumulativeDistances.add(totalRouteDistance);
-    }
-
-    // 2. FIND CANDIDATES: Gather all points within 400m
-    List<int> candidateStarts = [];
-    List<int> candidateDests = [];
-
-    for (int i = 0; i < coordinates.length; i++) {
-      if (haversine.as(LengthUnit.Meter, start, coordinates[i]) <= 400) {
-        candidateStarts.add(i);
-      }
-      if (haversine.as(LengthUnit.Meter, dest, coordinates[i]) <= 400) {
-        candidateDests.add(i);
-      }
-    }
-
-    if (candidateStarts.isEmpty || candidateDests.isEmpty) return; 
-
-    // 3. PAIRING: Calculate the Penalty Score for every possible combination
-    int bestStartIdx = -1;
-    int bestDestIdx = -1;
-    double lowestPenaltyScore = double.infinity;
-    
-    // Store the exact distances of the winning pair
-    double finalRideDistance = 0.0; 
-    double bestStartWalk = 0.0;
-    double bestDestWalk = 0.0;
-
-    for (int sIdx in candidateStarts) {
-      for (int dIdx in candidateDests) {
-        if (sIdx == dIdx) continue;
-
-        // Calculate Ride Distance
-        double rideDist = 0.0;
-        if (sIdx < dIdx) {
-          rideDist = cumulativeDistances[dIdx] - cumulativeDistances[sIdx];
-        } else { // It's a loop!
-          rideDist = (totalRouteDistance - cumulativeDistances[sIdx]) + cumulativeDistances[dIdx];
-        }
-
-        // Filter out ridiculous 1-block jeepney rides
-        if (rideDist < minRideDistance) continue; 
-
-        // Calculate Walk Distances
-        double sWalk = haversine.as(LengthUnit.Meter, start, coordinates[sIdx]);
-        double dWalk = haversine.as(LengthUnit.Meter, dest, coordinates[dIdx]);
-        double totalWalk = sWalk + dWalk;
-
-        // --- THE COST FUNCTION ---
-        // Calculate the total "pain" of this specific route combination
-        double penaltyScore = (totalWalk * walkMultiplier) + (rideDist * rideMultiplier);
-
-        // Does this pair have the lowest penalty? Make it the new winner!
-        if (penaltyScore < lowestPenaltyScore) {
-          lowestPenaltyScore = penaltyScore;
-          bestStartIdx = sIdx;
-          bestDestIdx = dIdx;
-          finalRideDistance = rideDist;
-          bestStartWalk = sWalk;
-          bestDestWalk = dWalk;
-        }
-      }
-    }
-
-    // 4. RESULT: If a valid route passed all tests, build it!
-    if (bestStartIdx != -1 && bestDestIdx != -1) {
-      double ridingDistanceKm = finalRideDistance / 1000.0;
-
-      // Base fare logic
-      double fare = regularBaseFare; 
-      if (ridingDistanceKm > 4.0) {
-        fare += (ridingDistanceKm - 4.0) * regularPerKm; 
-      }
-
-      validRoutes.add(
-        RouteResult(
-          routeName: routeName,
-          estimatedStartWalk: bestStartWalk,
-          estimatedEndWalk: bestDestWalk,
-          boardIndex: bestStartIdx,
-          alightIndex: bestDestIdx,
-          ridingDistanceKm: ridingDistanceKm,
-          estimatedFare: fare,
-          // You might need to add this property to your RouteResult class if you want to sort by it:
-          // totalEstimatedWalk: bestStartWalk + bestDestWalk, 
-        ),
-      );
-    }
-  });
-
-  // 5. GLOBAL SORTING: Keep the easiest walk at the top of the UI
-  // Make sure your RouteResult class has a getter for totalEstimatedWalk!
-  validRoutes.sort((a, b) => (a.estimatedStartWalk + a.estimatedEndWalk).compareTo(b.estimatedStartWalk + b.estimatedEndWalk));
-  
-  return validRoutes;
-}
-// END OF ALGORITHM
-
-// 1. Define the modes
 enum PinMode { none, start, destination }
 
-// 2. Add these variables to your state
 PinMode currentPinMode = PinMode.none;
 LatLng? startPin;
 LatLng? destinationPin;
@@ -215,6 +91,8 @@ String _searchQuery = '';
 // --- NEW STATE: Database Service ---
 final HiveService _hiveService = HiveService(); 
 
+// PHASE 2
+final OsrmService _osrmService = OsrmService();
 
 class _MapScreenState extends State<MapScreen> {
   List<JeepneyRoute> allRoutes = [];
@@ -230,15 +108,10 @@ class _MapScreenState extends State<MapScreen> {
   int _selectedIndex = 1;
   bool _showFloatingCard = false;
 
-  late FToast fToast;
-
   @override
   void initState() {
     super.initState();
     initializeRouteList();
-
-    fToast = FToast();
-    fToast.init(context);
 
     // --- THE STARTUP LOGIC ---
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -249,49 +122,6 @@ class _MapScreenState extends State<MapScreen> {
       }
     });
   }
-
-  // void _showCustomToast(String message, {IconData? icon}) {
-  //   Widget toast = Container(
-  //     margin: const EdgeInsets.only(bottom: 90),
-  //     padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-  //     decoration: BoxDecoration(
-  //       color: cardColor.withOpacity(0.9), // Your premium UI color!
-  //       borderRadius: BorderRadius.circular(25.0), // Creates a modern "pill" shape
-  //       boxShadow: [
-  //         BoxShadow(
-  //           color: Colors.black.withOpacity(0.2),
-  //           offset: const Offset(0, 5),
-  //           blurRadius: 10,
-  //         )
-  //       ],
-  //     ),
-  //     child: Row(
-  //       mainAxisSize: MainAxisSize.min, // Prevents it from stretching full width
-  //       children: [
-  //         // If you pass an icon, it shows up here (like a checkmark or bus icon)
-  //         if (icon != null) ...[
-  //           Icon(icon, color: primaryColor), 
-  //           const SizedBox(width: 12.0),
-  //         ],
-  //         Text(
-  //           message,
-  //           style: TextStyle(
-  //             color: fontColor, 
-  //             fontWeight: FontWeight.bold,
-  //             fontSize: 14,
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-
-  //   // Show the custom widget
-  //   fToast.showToast(
-  //     child: toast,
-  //     gravity: ToastGravity.SNACKBAR, // You can also use ToastGravity.TOP
-  //     toastDuration: const Duration(seconds: 2),
-  //   );
-  // }
 
   // --- NEW STATE: Favorites Popup Overlay ---
   bool _isSavePopupVisible = false;
@@ -306,50 +136,6 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
   // --- Fetching Walking Route using OSRM ---
-  Future<Map<String, dynamic>?> fetchWalkingRouteFromOSRM(LatLng start, LatLng end) async {
-    // 1. Establish our baseline straight-line distance
-    final Distance haversine = const Distance(); // Or Distance() depending on your package version
-    final double straightLineDist = haversine.as(LengthUnit.Meter, start, end);
-
-    // 2. Add 'overview=full' to force smooth, highly-accurate road curves
-    final url = 'https://router.project-osrm.org/route/v1/foot/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&overview=full';
-    
-    try {
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final coords = data['routes'][0]['geometry']['coordinates'] as List;
-        final osrmDistance = data['routes'][0]['distance'] as num;
-        
-        // 3. THE SANITY CHECK: Protect against the "Missing Gate" trap
-        // If OSRM forces a massive detour (more than 3x the straight line), ignore it.
-        if (osrmDistance > (straightLineDist * 3) && straightLineDist < 500) {
-          debugPrint("OSRM returned a massive detour. Falling back to straight line.");
-          return {
-            'path': [start, end],
-            'distance': straightLineDist,
-          };
-        }
-
-        // Convert GeoJSON [lon, lat] back to FlutterMap LatLng
-        List<LatLng> path = coords.map((c) => LatLng(c[1], c[0])).toList();
-        
-        return {
-          'path': path,
-          'distance': osrmDistance.toDouble(),
-        };
-      }
-    } catch (e) {
-      debugPrint("OSRM Request Failed or Timed Out: $e");
-    }
-    
-    // 4. THE FAILSAFE: If the API fails completely, don't break the UI!
-    // Just return a straight line so the user still sees a path.
-    return {
-      'path': [start, end],
-      'distance': straightLineDist,
-    };
-  }
 
   // 2. Logic: Loading the Catalog
   // --- UPDATED LOGIC: Loading Catalog with Colors ---
@@ -913,8 +699,8 @@ class _MapScreenState extends State<MapScreen> {
                   final alightPoint = routeData.polylineData!.points[result.alightIndex];
 
                   // switched to ORS from OSRM
-                  final startLeg = await fetchWalkingRouteFromOSRM(startPin!, boardPoint);
-                  final endLeg = await fetchWalkingRouteFromOSRM(alightPoint, destinationPin!);
+                  final startLeg = await _osrmService.fetchWalkingRoute(startPin!, boardPoint);
+                  final endLeg = await _osrmService.fetchWalkingRoute(alightPoint, destinationPin!);
 
                   if (startLeg != null && endLeg != null) {
                     setState(() {
@@ -1329,58 +1115,6 @@ class _MapScreenState extends State<MapScreen> {
       );
   }
 
-  // DRAGGABLE SCROLLABLE SHEET BUILDERS
-  // --- LOCATE SHEET CONTENT ---
-  // List<Widget> _buildLocateContent() {
-  //   if (suggestedRoutes.isEmpty) {
-  //     return [
-  //       const Text(
-  //         'Tara, Suroy Ta!',
-  //         style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor),
-  //       ),
-  //       const SizedBox(height: 10),
-  //       // The fixed area that forces the text to adapt
-  //       SizedBox(
-  //         height: 40, 
-  //         child: AutoSizeText(
-  //           'Welcome to SUROY TA! A Public Utility Jeepney (PUJ) Routing and Fare Estimation System design for Davaoeños',
-  //           style: const TextStyle(
-  //             color: fontColor, 
-  //             fontSize: 16, // The starting maximum size
-  //             height: 1.2,
-  //           ),
-  //           maxLines: 2, 
-  //           minFontSize: 10, // Prevents it from becoming microscopically small
-  //           overflow: TextOverflow.ellipsis, // Failsafe
-  //         ),
-  //       ),
-  //       const SizedBox(height: 20),
-  //       Container(
-  //         height: 60,
-  //         padding: const EdgeInsets.all(0),
-  //         margin: const EdgeInsets.symmetric(horizontal: 0),
-  //         decoration: BoxDecoration(
-  //           color: primaryColor,
-  //           borderRadius: const BorderRadius.all(Radius.circular(20)),
-            
-  //         ),
-  //         child: Center(
-  //           child:Text(
-  //             "APP INFO",
-  //             style: TextStyle(
-  //               fontWeight: FontWeight.bold,
-  //               fontSize: 30,
-  //               color: btnColor,
-  //             ),
-  //           ),
-  //         )
-  //       ),
-  //     ];
-  //   } else {
-  //     return _suggestedRoutesSheet();
-  //   }
-  // }
-  
   bool _isSelectAllChecked = false;
   bool _isSelectedRoute = false;
   // --- EXPLORE SHEET CONTENT ---
