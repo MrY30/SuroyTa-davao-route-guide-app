@@ -1,4 +1,3 @@
-// lib/services/osrm_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
@@ -7,7 +6,7 @@ import 'package:flutter/material.dart';
 
 class OsrmService {
   Future<Map<String, dynamic>?> fetchWalkingRoute(LatLng start, LatLng end) async {
-    // 1. Establish our baseline straight-line distance
+    // Establish straight-line distance
     final Distance haversine = const Distance(); // Or Distance() depending on your package version
     final double straightLineDist = haversine.as(LengthUnit.Meter, start, end);
 
@@ -21,7 +20,7 @@ class OsrmService {
         final coords = data['routes'][0]['geometry']['coordinates'] as List;
         final osrmDistance = data['routes'][0]['distance'] as num;
         
-        // 3. THE SANITY CHECK: Protect against the "Missing Gate" trap
+        // THE SANITY CHECK: Protect against the "Missing Gate" trap
         // If OSRM forces a massive detour (more than 3x the straight line), ignore it.
         if (osrmDistance > (straightLineDist * 3) && straightLineDist < 500) {
           debugPrint("OSRM returned a massive detour. Falling back to straight line.");
@@ -43,7 +42,7 @@ class OsrmService {
       debugPrint("OSRM Request Failed or Timed Out: $e");
     }
     
-    // 4. THE FAILSAFE: If the API fails completely, don't break the UI!
+    // THE FAILSAFE: If the API fails completely, don't break the UI!
     // Just return a straight line so the user still sees a path.
     return {
       'path': [start, end],

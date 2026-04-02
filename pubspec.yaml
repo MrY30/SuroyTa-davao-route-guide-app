@@ -49,6 +49,7 @@ dependencies:
   open_route_service: ^1.2.7
   auto_size_text: ^3.0.0
   google_fonts: ^8.0.2
+  flutter_riverpod: ^2.6.1
 
 dev_dependencies:
   flutter_test:

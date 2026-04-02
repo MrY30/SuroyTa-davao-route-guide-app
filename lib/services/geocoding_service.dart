@@ -5,12 +5,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-
-// LOCAL IMPORTS
-// PHASE 1
 import 'package:sakay_ta_mobile_app/core/constants.dart';
 
-// Add this above your GeocodingService class
 class GeocodeResult {
   final LatLng coordinates;
   final String name;
@@ -63,5 +59,6 @@ class GeocodingService {
       debugPrint("Geocoding Error: $e");
       return null;
     }
+    return null;
   }
 }
