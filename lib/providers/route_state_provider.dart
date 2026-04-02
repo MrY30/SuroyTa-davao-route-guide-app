@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:flutter_map/flutter_map.dart'; // Needed for Polyline
-import '../models/jeepney_route.dart';
-import '../models/route_result.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:sakay_ta_mobile_app/models/jeepney_route.dart';
+import 'package:sakay_ta_mobile_app/models/route_result.dart';
 
 // 1. The State Object (Holds the data)
 class RouteState {
