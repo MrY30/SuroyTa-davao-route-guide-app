@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../core/constants.dart';
+import 'package:sakay_ta_mobile_app/core/constants.dart';
 
-class CustomNavigation extends StatelessWidget{
+class CustomNavigationBar extends StatelessWidget{
   final VoidCallback onTap;
   final IconData icon;
   final String label;
   final int index;
   final int selectedIndex;
   
-  const CustomNavigation({
+  const CustomNavigationBar({
     super.key,
     required this.icon,
     required this.label,

@@ -4,25 +4,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
 import 'dart:math';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'models/favorite_location.dart';
-import 'services/hive_service.dart';
+import 'package:sakay_ta_mobile_app/services/geocoding_service.dart';
+import 'package:sakay_ta_mobile_app/ui/widgets/app_info_sheet.dart';
+import 'package:sakay_ta_mobile_app/ui/widgets/favorite_card.dart';
+import 'package:sakay_ta_mobile_app/ui/widgets/routes_legend.dart';
+import 'package:sakay_ta_mobile_app/models/favorite_location.dart';
+import 'package:sakay_ta_mobile_app/services/hive_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-// LOCAL IMPORTS
-// PHASE 1
 import 'package:sakay_ta_mobile_app/core/constants.dart';
 import 'package:sakay_ta_mobile_app/models/jeepney_route.dart';
 import 'package:sakay_ta_mobile_app/models/route_result.dart';
-
-// PHASE 2
 import 'package:sakay_ta_mobile_app/services/osrm_service.dart';
 import 'package:sakay_ta_mobile_app/core/route_math.dart';
 
@@ -32,7 +29,8 @@ import 'package:sakay_ta_mobile_app/ui/widgets/custom_pin_button.dart';
 
 // PHASE 3 PART 2
 import 'package:sakay_ta_mobile_app/ui/widgets/app_header.dart';
-import 'package:sakay_ta_mobile_app/ui/widgets/custom_navigation.dart';
+import 'package:sakay_ta_mobile_app/ui/widgets/custom_navigation_bar.dart';
+import 'package:sakay_ta_mobile_app/services/location_service.dart';
 
 void main() async {
   // Ensure Flutter is ready before reading files
@@ -98,6 +96,9 @@ final HiveService _hiveService = HiveService();
 // PHASE 2
 final OsrmService _osrmService = OsrmService();
 
+final LocationService _locationService = LocationService();
+final GeocodingService _geocodingService = GeocodingService();
+
 class _MapScreenState extends State<MapScreen> {
   List<JeepneyRoute> allRoutes = [];
 
@@ -122,7 +123,8 @@ class _MapScreenState extends State<MapScreen> {
       // Ask Hive: Does the user want to see the info?
       if (_hiveService.getShowInfoOnStartup()) {
         // If yes (or if it's their very first time), show it!
-        _showAppInfoModal(context);
+        // _showAppInfoModal(context);
+        showAppInfoSheet(context);
       }
     });
   }
@@ -241,154 +243,7 @@ class _MapScreenState extends State<MapScreen> {
       color: routeColor,
     );
   }
-  // testing
-  // --- NEW LOGIC: Hardware GPS ---
-  Future<void> getUserCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
 
-    // 1. Check if GPS hardware is turned on
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      // _showCustomToast("Please enable GPS.", icon: Icons.notifications);
-      Fluttertoast.showToast(msg: 'Please enable GPS.', backgroundColor: cardColor);
-      return;
-    }
-
-    // 2. Check and request permissions
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        // _showCustomToast("Location permissions denied.", icon: Icons.notifications);
-        Fluttertoast.showToast(msg: 'Location permissions denied.', backgroundColor: cardColor);
-        return;
-      }
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      // _showCustomToast("Permissions permanently denied.", icon: Icons.notifications);
-      Fluttertoast.showToast(msg: 'Permissions permanently denied.', backgroundColor: cardColor);
-      return;
-    }
-
-    // 3. Get the actual location
-    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-    LatLng userLatLng = LatLng(position.latitude, position.longitude);
-
-    // 4. Set it as the Start Pin and move the map camera
-    setState(() {
-      startPin = userLatLng;
-      enableGPS = true;
-      _clearRoutingData();
-    });
-    maplibreController?.animateCamera(
-      maplibre.CameraUpdate.newLatLngZoom(
-        maplibre.LatLng(userLatLng.latitude, userLatLng.longitude), 
-        16.0
-      )
-    );
-    drawMapElements();
-  }
-  
-  // --- UPGRADED LOGIC: Dual-Input Search (Nominatim + Coordinates) ---
-  Future<void> searchLocation(String query) async {
-    if (query.isEmpty) return;
-
-    // FocusManager.instance.primaryFocus?.unfocus();
-
-    // 1. THE SMART INTERCEPTOR (Regex checks for "number, number")
-    final RegExp coordRegExp = RegExp(r'^([-+]?\d{1,2}(?:\.\d+)?),\s*([-+]?\d{1,3}(?:\.\d+)?)$');
-    final match = coordRegExp.firstMatch(query);
-
-    if (match != null) {
-      // PATH A: It's a raw coordinate! No internet required.
-      final lat = double.parse(match.group(1)!);
-      final lon = double.parse(match.group(2)!);
-      LatLng searchResult = LatLng(lat, lon);
-      
-      setState((){
-        destinationPin = searchResult;
-        _clearRoutingData();
-        _currentDestinationName = '';
-      });
-      
-      drawMapElements();
-
-      if(sheetController.isAttached){
-        sheetController.animateTo(0.26, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut,);
-      }
-
-      Future.delayed(const Duration(milliseconds: 400), (){
-        maplibreController?.animateCamera(
-          maplibre.CameraUpdate.newLatLngZoom(
-            maplibre.LatLng(searchResult.latitude, searchResult.longitude), 16.0
-          )
-        );
-      });
-       
-      await _saveToHistory("Pinned Coordinate", searchResult); // Save to Hive
-
-      // _showCustomToast('Coordinate dropped!', icon: Icons.notifications);
-      Fluttertoast.showToast(msg: 'Coordinate dropped!', backgroundColor: cardColor);
-      return;
-    }
-
-    // PATH B: It's text. Proceed with Nominatim Geocoding.
-    // _showCustomToast('Searching for "$query" ...', icon: Icons.notifications);
-    Fluttertoast.showToast(msg: 'Searching for "$query" ...', backgroundColor: cardColor);
-
-    final String scopedQuery = "$query, Davao City";
-    final url = 'https://nominatim.openstreetmap.org/search?q=$scopedQuery&format=json&limit=1';
-
-    try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'User-Agent': 'SakayTaApp/1.0 (${dotenv.env['EMAIL_NOMINATIM']})'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data.isNotEmpty) {
-          final lat = double.parse(data[0]['lat']);
-          final lon = double.parse(data[0]['lon']);
-          final displayName = data[0]['name'] ?? query; // Get the official name if available
-          LatLng searchResult = LatLng(lat, lon);
-
-          setState((){
-            destinationPin = searchResult;
-            _clearRoutingData();
-            _currentDestinationName = displayName;
-          });
-        
-          drawMapElements();
-
-          if(sheetController.isAttached){
-            sheetController.animateTo(0.26, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut,);
-          }
-
-          Future.delayed(const Duration(milliseconds: 400), (){
-            maplibreController?.animateCamera(
-              maplibre.CameraUpdate.newLatLngZoom(
-                maplibre.LatLng(searchResult.latitude, searchResult.longitude), 16.0
-              )
-            );
-          });
-
-          await _saveToHistory(displayName, searchResult); // Save to Hive
-          
-        } else {
-          // _showCustomToast("Location not found in Davao City.", icon: Icons.notifications);
-          Fluttertoast.showToast(msg: 'Location not found in Davao City.', backgroundColor: cardColor);
-        }
-      }
-    } catch (e) {
-      debugPrint("Geocoding Error: $e");
-    }
-  }
-
-  // --- NEW LOGIC: Centralized Data Invalidation ---
-  // Call this ANY TIME the startPin or destinationPin changes or is removed.
   void _clearRoutingData() {
     suggestedRoutes.clear();
     selectedRoute = null;
@@ -940,10 +795,6 @@ class _MapScreenState extends State<MapScreen> {
         style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: primaryColor, fontFamily: GoogleFonts.paytoneOne().fontFamily),
       ),
       const SizedBox(height: 10),
-      // const Text(
-      //   'Find the location you wish to go by typing its name or paste its coordinates from external maps.',
-      //   style: TextStyle(color: fontColor),
-      // ),
       SizedBox(
         height: 40, 
         child: AutoSizeText(
@@ -974,8 +825,33 @@ class _MapScreenState extends State<MapScreen> {
               borderSide: BorderSide.none,
             ),
           ),
-          onSubmitted: (value) {
-            searchLocation(value);
+          onSubmitted: (value) async {
+            // searchLocation(value);
+            GeocodeResult? geocodeResult = await _geocodingService.searchLocation(value);
+
+            if(geocodeResult != null){
+              setState((){
+                destinationPin = geocodeResult.coordinates;
+                _clearRoutingData();
+                _currentDestinationName = geocodeResult.name;
+              });
+                
+              drawMapElements();
+
+              if(sheetController.isAttached){
+                sheetController.animateTo(0.26, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut,);
+              }
+
+              Future.delayed(const Duration(milliseconds: 400), (){
+                maplibreController?.animateCamera(
+                  maplibre.CameraUpdate.newLatLngZoom(
+                    maplibre.LatLng(geocodeResult.coordinates.latitude, geocodeResult.coordinates.longitude), 16.0
+                  )
+                );
+              });
+                
+              await _saveToHistory(geocodeResult.name, geocodeResult.coordinates); // Save to Hive
+            }
           },
         ),
       ),
@@ -1126,367 +1002,6 @@ class _MapScreenState extends State<MapScreen> {
     // Refresh the UI to show the new history item
     setState(() {}); 
   }
-
-  // --- NEW LOGIC: Check if current pin is a Favorite ---
-  FavoriteLocation? _getCurrentFavorite() {
-    if (destinationPin == null) return null;
-    
-    final favorites = _hiveService.getFavorites();
-    
-    for (var fav in favorites) {
-      // Compare coordinates up to 4 decimal places to avoid micro-precision bugs
-      if (fav.latitude.toStringAsFixed(4) == destinationPin!.latitude.toStringAsFixed(4) &&
-          fav.longitude.toStringAsFixed(4) == destinationPin!.longitude.toStringAsFixed(4)) {
-        return fav; // Found a match!
-      }
-    }
-    return null; // No match found
-  }
-  
-  Widget _buildLegendWidget(){
-    // 1. Filter out only the routes the user has actively checked
-    final visibleRoutes = allRoutes.where((r) => r.isVisible).toList();
-    // 2. Determine if the legend should be shown
-    final bool showLegend = _selectedIndex == 0 && visibleRoutes.isNotEmpty;
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 350),
-        transitionBuilder: (Widget child, Animation<double> animation){
-          return FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(
-              scale: CurvedAnimation(
-                parent: animation, 
-                curve: Curves.easeOutBack, 
-                reverseCurve: Curves.easeIn
-              ),
-              alignment: Alignment.centerLeft,
-              child: child,
-            )
-          );
-        },
-        child: showLegend ? ConstrainedBox(
-          key: const ValueKey('legend_card'),
-          constraints: const BoxConstraints(maxWidth: 180),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: btnColor.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: const [
-                BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))
-              ]
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min, 
-              children: [
-                const Text(
-                  'Legend',
-                  style: TextStyle(
-                    fontSize: 12, 
-                    fontWeight: FontWeight.bold, 
-                    color: fontColor,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // --- NEW: THE SCROLLABLE CAP ---
-                ConstrainedBox(
-                  // Set the maximum height. 200.0 is roughly 6-7 routes before scrolling starts.
-                  constraints: const BoxConstraints(maxHeight: 75.0), 
-                  child: SingleChildScrollView(
-                    // This inner column holds the actual route items
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: visibleRoutes.map((route) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // The Route Color Indicator
-                              Container(
-                                width: 16,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: route.color,
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              // The Route Name
-                              Expanded(
-                                child: Text(
-                                  route.name,
-                                  style: const TextStyle(
-                                    fontSize: 10, 
-                                    color: fontColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(), // .toList() is added back here for the inner Column
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          )
-        ) : const SizedBox.shrink(key: ValueKey('empty_legend'))
-      )
-    );
-  }
-  
-  Widget _buildFavoriteCardWidget(){
-    return AnimatedScale(
-      scale: (destinationPin != null && !_isSavePopupVisible && _selectedIndex != 0) ? 1.0 : 0.0,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutBack,
-      child: Builder(
-        builder: (context){
-          FavoriteLocation? currentFav = _getCurrentFavorite();
-          bool isSaved = currentFav != null;
-
-          return GestureDetector(
-            onTap: () async{
-              if(isSaved){
-                await _hiveService.deleteLocation(currentFav.id);
-                setState(() {});
-                if(context.mounted){
-                  // _showCustomToast("Removed from Favorites", icon: Icons.notifications);
-                  Fluttertoast.showToast(msg: 'Removed from Favorites', backgroundColor: cardColor);
-                }
-              } else{
-                setState(() {
-                  // Pre-fill the text field. If empty, keep it empty so the hint text shows.
-                  _saveNameController.text = _currentDestinationName;
-                  _isSavePopupVisible = true; // Trigger the drop-down animation!
-                });
-              }
-            },
-            child: Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: btnColor.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(13),
-                boxShadow: [
-                  BoxShadow(
-                    color: btnColor.withOpacity(0.3),
-                    offset: Offset(0, 20),
-                    blurRadius: 20
-                  )
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20), 
-                child:Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        isSaved
-                          ? currentFav.name
-                          : (destinationPin != null 
-                              ? '${destinationPin!.latitude.toStringAsFixed(4)}, ${destinationPin!.longitude.toStringAsFixed(4)}'
-                              : ''),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 20,
-                          color: fontColor,
-                          shadows: [
-                            Shadow(
-                              offset: Offset(1, 4),
-                              blurRadius: 7,
-                              color: Colors.black.withOpacity(0.5)
-                            )
-                          ]
-                        ),
-                      ),
-                    ),
-                    Icon(isSaved ? Icons.star : Icons.star_border, color: isSaved ? Colors.amber : Colors.white),
-                  ],
-                )
-              )
-            ),
-          );
-        }
-      )
-    );
-  }
-  
-  void _showAppInfoModal(BuildContext context) {
-    // Temporary local state for the switch (until we wire up Hive)
-    bool showOnStartup = _hiveService.getShowInfoOnStartup();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true, // Allows the sheet to size itself perfectly to the content
-      backgroundColor: sheetBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (BuildContext context) {
-        // StatefulBuilder is REQUIRED here so the Switch can update its own UI
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            return FractionallySizedBox(
-              heightFactor: 0.96,
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min, // Hugs the content tightly
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // 1. THE DRAG HANDLE & HEADER
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 5,
-                          margin: const EdgeInsets.only(bottom: 20),
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                      Text(
-                        'About SuroyTa!',
-                        style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: primaryColor, fontFamily: GoogleFonts.paytoneOne().fontFamily),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 20),
-
-                      // 2. THE FARE MATRIX CARD
-                      Card(
-                        color: btnColor,
-                        elevation: 5,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            children: [
-                              const Text(
-                                'LTFRB Fare Matrix',
-                                style: TextStyle(color: fontColor, fontWeight: FontWeight.bold, fontSize: 16),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  // Regular Fares
-                                  Column(
-                                    children: [
-                                      const Text('Regular', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      Text('Base (4km): ₱${regularBaseFare.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
-                                      Text('Per Km: ₱${regularPerKm.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
-                                    ],
-                                  ),
-                                  Container(width: 1, height: 40, color: Colors.white24), // Subtle Divider
-                                  // Discounted Fares
-                                  Column(
-                                    children: [
-                                      const Text('Discounted', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      Text('Base (4km): ₱${discountedBaseFare.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
-                                      Text('Per Km: ₱${discountedPerKm.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 13)),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Effective $fareEffectiveDate',
-                                style: const TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 3. EXPANDABLE: OBJECTIVES
-                      Theme(
-                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent), // Removes default ugly borders
-                        child: ExpansionTile(
-                          iconColor: primaryColor,
-                          collapsedIconColor: fontColor,
-                          title: const Text('Project Objectives', style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
-                          children: const [
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                              child: Text(
-                                'Suroy Ta is designed to help Davaoeños navigate the city effortlessly. Our goal is to provide accurate PUJ routing, real-time fare estimation, and promote an efficient public transportation experience.',
-                                style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // 4. EXPANDABLE: HOW TO USE
-                      Theme(
-                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                        child: ExpansionTile(
-                          iconColor: primaryColor,
-                          collapsedIconColor: fontColor,
-                          title: const Text('How to Use Suroy Ta', style: TextStyle(color: fontColor, fontWeight: FontWeight.bold)),
-                          children: const [
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('1. Place your Start and Target pins on the map or use the Search tab.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
-                                  SizedBox(height: 8),
-                                  Text('2. Tap "Find" to generate the best jeepney routes.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
-                                  SizedBox(height: 8),
-                                  Text('3. Select a route to view your exact walking distance and estimated fare.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 5. THE STARTUP SWITCH
-                      SwitchListTile(
-                        activeColor: primaryColor,
-                        inactiveThumbColor: fontColor,
-                        inactiveTrackColor: sheetBackgroundColor,
-                        title: const Text('Show this on startup', style: TextStyle(color: fontColor, fontSize: 15)),
-                        value: showOnStartup,
-                        onChanged: (bool value) async {
-                          setModalState(() {
-                            showOnStartup = value; // Animates the switch toggle!
-                          });
-                          await _hiveService.toggleShowInfoOnStartup(value);
-                        },
-                      ),
-                      
-                      // SafeArea padding so it doesn't collide with the phone's home swipe bar
-                      const SizedBox(height: 20),
-                    ],
-                  ),
-                )
-              ),
-            );
-          }
-        );
-      },
-    );
-  }
   
   Future<void> _updateMainRouteWithArrows(String sourceId, String lineLayerId, String symbolLayerId, List<LatLng> points, String hexColor) async {
     // 1. Format the coordinates as a GeoJSON LineString
@@ -1571,8 +1086,30 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  
+  // --- NEW LOGIC: Check if current pin is a Favorite ---
+  FavoriteLocation? _getCurrentFavorite() {
+    if (destinationPin == null) return null;
+    
+    final favorites = _hiveService.getFavorites();
+    
+    for (var fav in favorites) {
+      // Compare coordinates up to 4 decimal places to avoid micro-precision bugs
+      if (fav.latitude.toStringAsFixed(4) == destinationPin!.latitude.toStringAsFixed(4) &&
+          fav.longitude.toStringAsFixed(4) == destinationPin!.longitude.toStringAsFixed(4)) {
+        return fav; // Found a match!
+      }
+    }
+    return null; // No match found
+  }
+
   @override
   Widget build(BuildContext context) {
+    FavoriteLocation? currentFav = _getCurrentFavorite();
+    bool isSaved = currentFav != null;
+    String displayTitle = isSaved ? currentFav.name : (destinationPin != null 
+        ? '${destinationPin!.latitude.toStringAsFixed(4)}, ${destinationPin!.longitude.toStringAsFixed(4)}'
+        : '');
     return Scaffold(
       extendBody: true,
       resizeToAvoidBottomInset: false,
@@ -1641,31 +1178,50 @@ class _MapScreenState extends State<MapScreen> {
           
           SafeArea(
             child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // --- App Header: Displays "SUROY TA!" which is the name of the app ---
-                      // _buildHeaderWidget(),
-                      AppHeader(
-                        onClick: () {
-                          // We will trigger the Modal Bottom Sheet here in the next step!
-                          // debugPrint("Help icon tapped!");
-                          _showAppInfoModal(context); 
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // --- App Header: Displays "SUROY TA!" which is the name of the app ---
+                  AppHeader(
+                    onClick: () {
+                      showAppInfoSheet(context); 
+                    }
+                  ),
+                  const SizedBox(height: 8),
+                  // --- Legend for Explore tab: Displays the selected routes to Explore its coverage ---
+                  // _buildLegendWidget(),
+                  RoutesLegend(
+                    visibleRoutes: allRoutes.where((r) => r.isVisible).toList(), 
+                    selectedIndex: _selectedIndex,
+                  ),
+                  // --- The Favorite Card: Displays the coordinates of the destination pin and allows user to save it to favorites ---
+                  FavoriteCard(
+                    isVisible: (destinationPin != null && !_isSavePopupVisible && _selectedIndex != 0),
+                    isSaved: isSaved,
+                    displayTitle: displayTitle, 
+                    onClick: () async{
+                      if(isSaved){
+                        await _hiveService.deleteLocation(currentFav.id);
+                        setState(() {});
+                        if(context.mounted){
+                          // _showCustomToast("Removed from Favorites", icon: Icons.notifications);
+                          Fluttertoast.showToast(msg: 'Removed from Favorites', backgroundColor: cardColor);
                         }
-                      ),
-                      const SizedBox(height: 8),
-                      // --- Legend for Explore tab: Displays the selected routes to Explore its coverage ---
-                      _buildLegendWidget(),
-                      // --- The Favorite Card: Displays the coordinates of the destination pin and allows user to save it to favorites ---
-                      _buildFavoriteCardWidget(),
-                    ],
-                  )
-                ),
+                      } else{
+                        setState(() {
+                          // Pre-fill the text field. If empty, keep it empty so the hint text shows.
+                          _saveNameController.text = _currentDestinationName;
+                          _isSavePopupVisible = true; // Trigger the drop-down animation!
+                        });
+                      }
+                    }
+                  ),
+                ],
+              )
+            ),
           ),
- 
-          // _buildFloatingRouteDetails(),
           FloatingRouteCard(
             route: selectedRoute,
             isVisible: (_showFloatingCard && _selectedIndex == 1), 
@@ -1790,8 +1346,25 @@ class _MapScreenState extends State<MapScreen> {
                             FloatingActionButton(
                               heroTag: "btnGPS",
                               backgroundColor: enableGPS ? btnColor : disableColor,
-                              onPressed: () {
-                                getUserCurrentLocation();
+                              onPressed: () async {
+                                final LatLng? userLatLng = await _locationService.getGPSLocation();
+
+                                if(userLatLng!= null){
+                                  setState(() {
+                                    startPin = userLatLng;
+                                    enableGPS = true;
+                                    _clearRoutingData();
+                                  });
+
+                                  maplibreController?.animateCamera(
+                                    maplibre.CameraUpdate.newLatLngZoom(
+                                      maplibre.LatLng(userLatLng.latitude, userLatLng.longitude), 
+                                      16.0
+                                    )
+                                  );
+
+                                  drawMapElements();
+                                }
                               },
                               // Make sure enableGPS and fontColor are defined in your state
                               child: Icon(enableGPS ? Icons.gps_fixed: Icons.gps_off, color: fontColor), 
@@ -2033,24 +1606,21 @@ class _MapScreenState extends State<MapScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // _buildNavItem(icon: Icons.map_outlined, label: "Explore", index: 0),
-              // _buildNavItem(icon: Icons.location_on, label: "Locate", index: 1),
-              // _buildNavItem(icon: Icons.search, label: "Search", index: 2),
-              CustomNavigation(
+              CustomNavigationBar(
                 icon: Icons.map_outlined, 
                 label: "Explore", 
                 index: 0,
                 selectedIndex: _selectedIndex, 
                 onTap: () => _handleTabChanged(0)
               ),
-              CustomNavigation(
+              CustomNavigationBar(
                 icon: Icons.location_on, 
                 label: "Locate", 
                 index: 1,
                 selectedIndex: _selectedIndex, 
                 onTap: () => _handleTabChanged(1)
               ),
-              CustomNavigation(
+              CustomNavigationBar(
                 icon: Icons.search, 
                 label: "Search", 
                 index: 2,

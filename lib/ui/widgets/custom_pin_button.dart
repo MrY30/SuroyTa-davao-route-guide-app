@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 // Import your PinMode enum and constants here!
-import '../../core/constants.dart';
-import '../../main.dart';
+import 'package:sakay_ta_mobile_app/core/constants.dart';
+import 'package:sakay_ta_mobile_app/main.dart';
 
 class CustomPinButton extends StatelessWidget {
   final String label;

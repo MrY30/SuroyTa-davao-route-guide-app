@@ -1,5 +1,5 @@
 import 'package:latlong2/latlong.dart';
-import '../core/constants.dart';
+import 'package:sakay_ta_mobile_app/core/constants.dart';
 
 class RouteResult {
   final String routeName;

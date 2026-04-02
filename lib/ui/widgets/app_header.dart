@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/constants.dart';
+import 'package:sakay_ta_mobile_app/core/constants.dart';
 
 class AppHeader extends StatelessWidget{
   final VoidCallback onClick;

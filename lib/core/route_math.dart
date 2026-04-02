@@ -1,6 +1,6 @@
 import 'package:latlong2/latlong.dart';
-import '../core/constants.dart';
-import '../models/route_result.dart';
+import 'package:sakay_ta_mobile_app/core/constants.dart';
+import 'package:sakay_ta_mobile_app/models/route_result.dart';
 
 
 // 2. The Isolate Function (Must be top-level, outside your classes)

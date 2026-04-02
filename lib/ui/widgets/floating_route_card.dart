@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 // Don't forget to import your RouteResult model and constants here!
-import '../../models/route_result.dart';
-import '../../core/constants.dart';
+import 'package:sakay_ta_mobile_app/models/route_result.dart';
+import 'package:sakay_ta_mobile_app/core/constants.dart';
 
 class FloatingRouteCard extends StatelessWidget {
   // 1. Declare what this widget NEEDS to function.
