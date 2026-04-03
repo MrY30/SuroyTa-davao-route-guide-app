@@ -19,3 +19,4 @@ const double regularPerKm = 1.80;
 const double discountedBaseFare = 10.40;
 const double discountedPerKm = 1.44;
 const String fareEffectiveDate = "October 8, 2023";
+const String version = "beta-1.0.040326";

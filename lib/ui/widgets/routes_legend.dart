@@ -7,6 +7,7 @@ class RoutesLegend extends StatelessWidget{
   final int selectedIndex;
 
   const RoutesLegend({
+    super.key,
     required this.visibleRoutes,
     required this.selectedIndex,
   });
