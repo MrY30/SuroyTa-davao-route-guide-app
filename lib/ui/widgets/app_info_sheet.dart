@@ -123,7 +123,7 @@ void showAppInfoSheet(BuildContext context) {
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                               child: Text(
-                                'Suroy Ta is designed to help Davaoeños navigate the city effortlessly. Our goal is to provide accurate PUJ routing, real-time fare estimation, and promote an efficient public transportation experience.',
+                                'The Suroy Ta! is a mobile-based geographic information system (GIS) and routing application engineered to optimize PUJ transit within Davao City. This system provides an interactive map interface allowing users to explore jeepney routes, identify optimal transit paths from a given origin to a destination, and estimate travel costs.',
                                 style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
                               ),
                             ),
@@ -144,11 +144,35 @@ void showAppInfoSheet(BuildContext context) {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('1. Place your Start and Target pins on the map or use the Search tab.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  // --- LOCATE TAB INSTRUCTIONS ---
+                                  Text('📍 Finding a Route (Locate Tab)', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                  SizedBox(height: 6),
+                                  Text('1. Tap the GPS button for your current location, or tap the map to drop a Start pin.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 4),
+                                  Text('2. Drop a Target pin for your destination. (Tip: Tap the coordinates to save it to Favorites!)', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 4),
+                                  Text('3. Tap "Find" to calculate the best jeepney routes.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 4),
+                                  Text('4. Select a route card to view your walking path, transit line, and estimated fare.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 16),
+
+                                  // --- EXPLORE TAB INSTRUCTIONS ---
+                                  Text('🗺️ Browsing Routes (Explore Tab)', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                  SizedBox(height: 6),
+                                  Text('• Scroll through or use the search bar to filter the catalog of PUJ routes.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 4),
+                                  Text('• Tap any route card to draw its specific path on the map.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 4),
+                                  Text('• Select multiple routes at once to compare them, then tap "Clear" to reset the map.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 16),
+
+                                  // --- SEARCH TAB INSTRUCTIONS ---
+                                  Text('🔍 Quick Search (Search Tab)', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                  SizedBox(height: 6),
+                                  Text('• Type a landmark name or exact coordinates to instantly pan the map.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+                                  SizedBox(height: 4),
+                                  Text('• Quickly jump to your Recent Searches or your saved Favorite locations.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
                                   SizedBox(height: 8),
-                                  Text('2. Tap "Find" to generate the best jeepney routes.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
-                                  SizedBox(height: 8),
-                                  Text('3. Select a route to view your exact walking distance and estimated fare.', style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
                                 ],
                               ),
                             ),
