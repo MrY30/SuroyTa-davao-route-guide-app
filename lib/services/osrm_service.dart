@@ -7,10 +7,9 @@ import 'package:flutter/material.dart';
 class OsrmService {
   Future<Map<String, dynamic>?> fetchWalkingRoute(LatLng start, LatLng end) async {
     // Establish straight-line distance
-    final Distance haversine = const Distance(); // Or Distance() depending on your package version
+    final Distance haversine = const Distance();
     final double straightLineDist = haversine.as(LengthUnit.Meter, start, end);
 
-    // 2. Add 'overview=full' to force smooth, highly-accurate road curves
     final url = 'https://router.project-osrm.org/route/v1/foot/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&overview=full';
     
     try {
@@ -30,7 +29,7 @@ class OsrmService {
           };
         }
 
-        // Convert GeoJSON [lon, lat] back to FlutterMap LatLng
+        // Convert GeoJSON back to FlutterMap LatLng
         List<LatLng> path = coords.map((c) => LatLng(c[1], c[0])).toList();
         
         return {
@@ -42,7 +41,6 @@ class OsrmService {
       debugPrint("OSRM Request Failed or Timed Out: $e");
     }
     
-    // THE FAILSAFE: If the API fails completely, don't break the UI!
     // Just return a straight line so the user still sees a path.
     return {
       'path': [start, end],

@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-// Don't forget to import your RouteResult model and constants here!
 import 'package:sakay_ta_mobile_app/models/route_result.dart';
 import 'package:sakay_ta_mobile_app/core/constants.dart';
 
 class FloatingRouteCard extends StatelessWidget {
-  // 1. Declare what this widget NEEDS to function.
-  final RouteResult? route; // The data to display
-  final VoidCallback onClose; // The remote control to close the card
+  final RouteResult? route;
+  final VoidCallback onClose;
   final bool isVisible;
 
-  // 2. The Constructor: This forces the parent to provide the required data.
   const FloatingRouteCard({
     super.key, 
     required this.route, 
@@ -19,25 +16,15 @@ class FloatingRouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // If there is no route, don't draw anything
     if (route == null) return const SizedBox.shrink();
-
-    // Paste your existing AnimatedPositioned and Container UI code here.
-    
-    // IMPORTANT: Inside your UI, where you have the GestureDetector for the close button:
-    // Replace your `setState` logic with just calling the remote control:
-    // onTap: onClose, 
-    // 1. Calculate combined walking distance
     final totalStartWalk = route!.actualStartWalk ?? route!.estimatedStartWalk;
     final totalEndWalk = route!.actualEndWalk ?? route!.estimatedEndWalk;
     final totalWalk = totalStartWalk + totalEndWalk;
     
-    // Only show '~' if we are still relying on estimates
     final isExactWalk = route!.actualStartWalk != null && route!.actualEndWalk != null;
     final walkPrefix = isExactWalk ? '' : '~';
     final walkText = '$walkPrefix${totalWalk.toStringAsFixed(0)}m';
 
-    // 2. Format texts
     final rideDistanceText = '${route!.ridingDistanceKm.toStringAsFixed(1)}km';
     final regularFareText = '₱ ${route!.estimatedFare.toStringAsFixed(2)}';
     final discountedFareText = '₱ ${route!.estimatedDiscountedFare.toStringAsFixed(2)}';
@@ -50,7 +37,6 @@ class FloatingRouteCard extends StatelessWidget {
       right: 0,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 15),
-        // Removed the global padding here to allow for the two-tone split!
         decoration: BoxDecoration(
           color: btnColor, 
           borderRadius: BorderRadius.circular(15),
@@ -64,7 +50,7 @@ class FloatingRouteCard extends StatelessWidget {
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min, 
-          crossAxisAlignment: CrossAxisAlignment.stretch, // Stretches children horizontally
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ==========================================
             // TOP ROW: Route Name & Close Button
@@ -126,7 +112,7 @@ class FloatingRouteCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(Icons.directions_bus, color: fontColor, size: 18), // Change to Icons.airport_shuttle if you prefer!
+                          Icon(Icons.directions_bus, color: fontColor, size: 18),
                           const SizedBox(width: 6),
                           Text(rideDistanceText, style: TextStyle(color: fontColor, fontSize: 15)),
                         ],
@@ -134,10 +120,8 @@ class FloatingRouteCard extends StatelessWidget {
                     ],
                   ),
                   
-                  // --- RIGHT: Fares ---
                   Row(
                     children: [
-                      // Discounted Fare Column
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -149,7 +133,6 @@ class FloatingRouteCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(width: 25),
-                      // Regular Fare Column
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

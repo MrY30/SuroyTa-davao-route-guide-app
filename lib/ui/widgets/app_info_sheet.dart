@@ -18,7 +18,6 @@ void showAppInfoSheet(BuildContext context) {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (BuildContext context) {
-        // StatefulBuilder is REQUIRED here so the Switch can update its own UI
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
             return FractionallySizedBox(
@@ -27,10 +26,9 @@ void showAppInfoSheet(BuildContext context) {
                 padding: const EdgeInsets.all(20.0),
                 child: SingleChildScrollView(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min, // Hugs the content tightly
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 1. THE DRAG HANDLE & HEADER
                       Center(
                         child: Container(
                           width: 40,
@@ -55,7 +53,6 @@ void showAppInfoSheet(BuildContext context) {
                       ),
                       const SizedBox(height: 5),
 
-                      // 2. THE FARE MATRIX CARD
                       Card(
                         color: btnColor,
                         elevation: 5,
@@ -90,7 +87,7 @@ void showAppInfoSheet(BuildContext context) {
                                       Text('₱${regularPerKm.toStringAsFixed(2)}', style: const TextStyle(color: fontColor, fontSize: 25, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
-                                  Container(width: 1, height: 150, color: Colors.white24), // Subtle Divider
+                                  Container(width: 1, height: 150, color: Colors.white24),
                                   // Discounted Fares
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,9 +109,8 @@ void showAppInfoSheet(BuildContext context) {
                       ),
                       const SizedBox(height: 16),
 
-                      // 3. EXPANDABLE: OBJECTIVES
                       Theme(
-                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent), // Removes default ugly borders
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent), 
                         child: ExpansionTile(
                           iconColor: primaryColor,
                           collapsedIconColor: fontColor,
@@ -131,7 +127,6 @@ void showAppInfoSheet(BuildContext context) {
                         ),
                       ),
 
-                      // 4. EXPANDABLE: HOW TO USE
                       Theme(
                         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                         child: ExpansionTile(
@@ -181,7 +176,6 @@ void showAppInfoSheet(BuildContext context) {
                       ),
                       const SizedBox(height: 16),
 
-                      // 5. THE STARTUP SWITCH
                       SwitchListTile(
                         activeThumbColor: primaryColor,
                         inactiveThumbColor: fontColor,
@@ -190,13 +184,12 @@ void showAppInfoSheet(BuildContext context) {
                         value: showOnStartup,
                         onChanged: (bool value) async {
                           setModalState(() {
-                            showOnStartup = value; // Animates the switch toggle!
+                            showOnStartup = value;
                           });
                           await _hiveService.toggleShowInfoOnStartup(value);
                         },
                       ),
                       
-                      // SafeArea padding so it doesn't collide with the phone's home swipe bar
                       const SizedBox(height: 20),
                     ],
                   ),

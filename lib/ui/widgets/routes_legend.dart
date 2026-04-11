@@ -14,9 +14,7 @@ class RoutesLegend extends StatelessWidget{
 
   @override
   Widget build(BuildContext context) {
-    // 1. Filter out only the routes the user has actively checked
-    // final visibleRoutes = allRoutes.where((r) => r.isVisible).toList();
-    // 2. Determine if the legend should be shown
+    
     final bool showLegend = selectedIndex == 0 && visibleRoutes.isNotEmpty;
     return Align(
       alignment: Alignment.centerLeft,
@@ -62,12 +60,9 @@ class RoutesLegend extends StatelessWidget{
                   ),
                 ),
                 const SizedBox(height: 8),
-                // --- NEW: THE SCROLLABLE CAP ---
                 ConstrainedBox(
-                  // Set the maximum height. 200.0 is roughly 6-7 routes before scrolling starts.
                   constraints: const BoxConstraints(maxHeight: 75.0), 
                   child: SingleChildScrollView(
-                    // This inner column holds the actual route items
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: visibleRoutes.map((route) {
@@ -76,7 +71,6 @@ class RoutesLegend extends StatelessWidget{
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // The Route Color Indicator
                               Container(
                                 width: 16,
                                 height: 4,
@@ -86,7 +80,6 @@ class RoutesLegend extends StatelessWidget{
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              // The Route Name
                               Expanded(
                                 child: Text(
                                   route.name,
@@ -102,7 +95,7 @@ class RoutesLegend extends StatelessWidget{
                             ],
                           ),
                         );
-                      }).toList(), // .toList() is added back here for the inner Column
+                      }).toList(),
                     ),
                   ),
                 ),

@@ -8,7 +8,7 @@ class CustomPinButton extends StatelessWidget {
   final String label;
   final String imagePath;
   final PinMode mode;
-  final PinMode currentMode; // We need to know the app's current mode to determine the color
+  final PinMode currentMode;
   final LatLng? pinData;
   final VoidCallback onTap;
 
@@ -24,11 +24,6 @@ class CustomPinButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Paste your existing 3-State Visual Logic here
-    // (e.g., bool isSelecting = currentMode == mode; bool isPlaced = pinData != null; ...)
-
-    // Paste your SizedBox and ElevatedButton code here.
-    // Use the variables passed in the constructor (label, imagePath, onTap) inside the button.
     bool isSelecting = currentMode == mode;
     bool isPlaced = pinData != null;
 
@@ -38,21 +33,20 @@ class CustomPinButton extends StatelessWidget {
 
     // The 3-State Visual Logic
     if (isPlaced) {
-      bgColor = primaryColor; // STATE 3: Placed (Solid Primary Color)
+      bgColor = primaryColor; // STATE 3: Placed
       txtColor = fontColor;
-      // Add a tiny checkmark to really sell the "Placed" state
       trailingIcon = const Padding(
         padding: EdgeInsets.only(left: 4), 
         child: Icon(Icons.check_circle, color: Colors.white, size: 16)
       );
     } else if (isSelecting) {
-      bgColor = disableColor; // STATE 2: Selecting (Dimmed/Pulsing)
+      bgColor = disableColor; // STATE 2: Selecting
       txtColor = fontColor;
     } 
-    // Otherwise, it falls back to STATE 1: Idle (btnColor)
+    // STATE 1: Idle
 
     return SizedBox(
-      width: 120, // Slightly wider to accommodate the new checkmark
+      width: 120,
       height: 40,
       child: ElevatedButton(
         onPressed: onTap,

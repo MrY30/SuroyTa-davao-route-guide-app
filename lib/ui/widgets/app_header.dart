@@ -44,9 +44,8 @@ class AppHeader extends StatelessWidget{
               ),
             ),
           ),
-          // 2. The Help Icon pinned to the right edge
           Positioned(
-            right: 10.0, // Gives it a little breathing room from the edge
+            right: 10.0,
             top: 0,
             bottom: 0,
             child: IconButton(

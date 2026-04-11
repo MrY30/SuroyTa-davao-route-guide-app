@@ -33,7 +33,7 @@ class HiveService {
     await _locationBox.deleteAll(historyKeys);
   }
 
-  // Read the preference (Defaults to true if the user has never opened the app before)
+  // Read the preference
   bool getShowInfoOnStartup() {
     return _settingsBox.get('show_startup_info', defaultValue: true);
   }

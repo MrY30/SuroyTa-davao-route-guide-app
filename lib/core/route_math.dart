@@ -3,7 +3,7 @@ import 'package:sakay_ta_mobile_app/core/constants.dart';
 import 'package:sakay_ta_mobile_app/models/route_result.dart';
 
 
-// 2. The Isolate Function (Must be top-level, outside your classes)
+// 2. The Isolate Function
 // It accepts a map containing the start pin, dest pin, and all route coordinates.
 List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
   final LatLng start = data['start'];
@@ -24,7 +24,6 @@ List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
   allRouteCoordinates.forEach((routeName, coordinates) {
     if (coordinates.isEmpty) return; 
 
-    // 1. PRE-CALCULATE: Cumulative Distances (Speeds up the math massively)
     List<double> cumulativeDistances = [0.0];
     double totalRouteDistance = 0.0;
     for (int i = 0; i < coordinates.length - 1; i++) {
@@ -32,7 +31,6 @@ List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
       cumulativeDistances.add(totalRouteDistance);
     }
 
-    // 2. FIND CANDIDATES: Gather all points within 400m
     List<int> candidateStarts = [];
     List<int> candidateDests = [];
 
@@ -47,12 +45,10 @@ List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
 
     if (candidateStarts.isEmpty || candidateDests.isEmpty) return; 
 
-    // 3. PAIRING: Calculate the Penalty Score for every possible combination
     int bestStartIdx = -1;
     int bestDestIdx = -1;
     double lowestPenaltyScore = double.infinity;
     
-    // Store the exact distances of the winning pair
     double finalRideDistance = 0.0; 
     double bestStartWalk = 0.0;
     double bestDestWalk = 0.0;
@@ -65,11 +61,10 @@ List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
         double rideDist = 0.0;
         if (sIdx < dIdx) {
           rideDist = cumulativeDistances[dIdx] - cumulativeDistances[sIdx];
-        } else { // It's a loop!
+        } else {
           rideDist = (totalRouteDistance - cumulativeDistances[sIdx]) + cumulativeDistances[dIdx];
         }
 
-        // Filter out ridiculous 1-block jeepney rides
         if (rideDist < minRideDistance) continue; 
 
         // Calculate Walk Distances
@@ -77,8 +72,6 @@ List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
         double dWalk = haversine.as(LengthUnit.Meter, dest, coordinates[dIdx]);
         double totalWalk = sWalk + dWalk;
 
-        // --- THE COST FUNCTION ---
-        // Calculate the total "pain" of this specific route combination
         double penaltyScore = (totalWalk * walkMultiplier) + (rideDist * rideMultiplier);
 
         // Does this pair have the lowest penalty? Make it the new winner!
@@ -112,17 +105,12 @@ List<RouteResult> processRoutesInBackground(Map<String, dynamic> data) {
           alightIndex: bestDestIdx,
           ridingDistanceKm: ridingDistanceKm,
           estimatedFare: fare,
-          // You might need to add this property to your RouteResult class if you want to sort by it:
-          // totalEstimatedWalk: bestStartWalk + bestDestWalk, 
         ),
       );
     }
   });
 
-  // 5. GLOBAL SORTING: Keep the easiest walk at the top of the UI
-  // Make sure your RouteResult class has a getter for totalEstimatedWalk!
   validRoutes.sort((a, b) => (a.estimatedStartWalk + a.estimatedEndWalk).compareTo(b.estimatedStartWalk + b.estimatedEndWalk));
   
   return validRoutes;
 }
-// END OF ALGORITHM

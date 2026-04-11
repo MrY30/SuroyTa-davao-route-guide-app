@@ -1,12 +1,11 @@
 import 'package:hive/hive.dart';
 
-// This part is crucial! It tells the generator what file to create.
 part 'favorite_location.g.dart'; 
 
-@HiveType(typeId: 0) // Every unique class in Hive needs a unique typeId
+@HiveType(typeId: 0)
 class FavoriteLocation {
   @HiveField(0)
-  final String id; // A unique ID (usually the timestamp of when it was saved)
+  final String id;
 
   @HiveField(1)
   final String name;
@@ -21,7 +20,7 @@ class FavoriteLocation {
   final int? iconCodePoint;
 
   @HiveField(5)
-  final bool isFavorite; // true = Favorite, false = History
+  final bool isFavorite;
 
   FavoriteLocation({
     required this.id,

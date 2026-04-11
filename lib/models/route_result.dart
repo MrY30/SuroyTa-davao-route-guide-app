@@ -3,8 +3,8 @@ import 'package:sakay_ta_mobile_app/core/constants.dart';
 
 class RouteResult {
   final String routeName;
-  final double estimatedStartWalk; // Split from total
-  final double estimatedEndWalk;   // Split from total
+  final double estimatedStartWalk;
+  final double estimatedEndWalk;
   final int boardIndex; 
   final int alightIndex; 
   
@@ -13,8 +13,8 @@ class RouteResult {
   final double estimatedFare;
 
   // --- OSRM PROPERTIES ---
-  double? actualStartWalk; // Split from total
-  double? actualEndWalk;   // Split from total
+  double? actualStartWalk;
+  double? actualEndWalk;
   List<LatLng>? actualWalkPathStart; 
   List<LatLng>? actualWalkPathEnd; 
   bool isFetchingActualRoute = false; 
@@ -29,16 +29,14 @@ class RouteResult {
     required this.estimatedFare,
   });
 
-  // A helper getter so we can still easily sort the list by the shortest overall walk
   double get totalEstimatedWalk => estimatedStartWalk + estimatedEndWalk;
 
-  // --- THE NEW MATH PROPERTY ---
   // Safely calculates the discounted fare using the 4km base threshold
   double get estimatedDiscountedFare {
     if (ridingDistanceKm <= 4.0) {
       return discountedBaseFare; // Base fare for first 4km
     } else {
-      // Base fare + (excess kilometers * 1.44)
+      // Base fare + (excess kilometers * rate per km)
       return discountedBaseFare + ((ridingDistanceKm - 4.0) * discountedPerKm);
     }
   }

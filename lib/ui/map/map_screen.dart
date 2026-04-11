@@ -77,7 +77,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   void dispose() {
-    // Always dispose controllers to prevent memory leaks!
     _saveNameController.dispose();
     super.dispose();
   }
@@ -99,8 +98,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     String layerId,
     List<LatLng> points,
   ) async {
-    // 1. Strict formatting: Ensure it's a FeatureCollection.
-    // If we have less than 2 points, pass an empty map to clear the line safely.
     Map<String, dynamic> geoJson;
 
     if (points.length < 2) {
@@ -143,32 +140,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  // --- NEW LOGIC: MapLibre Imperative Drawing ---
+  // --- MapLibre Imperative Drawing ---
   void drawMapElements() async {
 
-    // 1. Read the current pins directly from Riverpod!
+    // Read the current pins directly from Riverpod!
     final mapState = ref.read(mapStateProvider);
     final startPin = mapState.startPin;
     final destinationPin = mapState.destinationPin;
 
-    // 2. THE FIX: Read the route data directly from Riverpod!
+    // Read the route data directly from Riverpod!
     final routeState = ref.read(routeStateProvider);
     final allRoutes = routeState.allRoutes;
     final selectedRoute = routeState.selectedRoute;
 
-    // 1. Clear the canvas of old lines and pins
+    // Clear the canvas of old lines and pins
     await maplibreController?.clearLines();
     await maplibreController?.clearCircles();
     await maplibreController?.clearSymbols();
 
-    // 2. Clear custom Sources and Layers (for our dashed lines)
-    // We wrap this in a try-catch because it will throw an error on the very first
-    // run if the layers don't exist yet, which is totally fine!
-    // 2. SAFELY CLEAR the dashed lines (sends an empty array)
+    // Clear custom Sources and Layers (for our dashed lines)
     await _updateDashedLine('start-walk-source', 'start-walk-layer', []);
     await _updateDashedLine('end-walk-source', 'end-walk-layer', []);
 
-    // --- NEW: Clear the main route and arrows ---
+    // --- Clear the main route and arrows ---
     await _updateMainRouteWithArrows(
       'main-route-source',
       'main-route-line-layer',
@@ -177,7 +171,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       '#000000',
     );
 
-    // 4. SAFELY CLEAR all Explore Mode lines (This ensures unchecked routes disappear)
+    // SAFELY CLEAR all Explore Mode lines
     for (var route in allRoutes) {
       await _updateMainRouteWithArrows(
         'explore-source-${route.name}',
@@ -188,7 +182,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
     }
 
-    // --- CONTEXTUAL RENDERING GATEKEEPER ---
     if (_selectedIndex == 0) {
       // ==========================================
       // TAB 0: EXPLORE MODE
@@ -202,8 +195,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         String hexColor =
             '#${route.color.value.toRadixString(16).substring(2)}';
 
-        // Command the GPU to draw the solid jeepney line AND the arrows
-        // Use dynamic IDs based on the route name so they don't overwrite each other!
         String sourceId = 'explore-source-${route.name}';
         String lineId = 'explore-line-${route.name}';
         String arrowId = 'explore-arrow-${route.name}';
@@ -251,7 +242,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         );
       }
 
-      // 3. Draw the Selected Route
+      // Draw the Selected Route
       if (selectedRoute != null && startPin != null && destinationPin != null) {
         final routeData = allRoutes.firstWhere(
           (r) => r.name == selectedRoute.routeName,
@@ -272,10 +263,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           ];
         }
 
-        // String hexColor = '#${routeData.color.value.toRadixString(16).substring(2)}';
         String hexColor = '#42c585';
 
-        // Command the GPU to draw the solid jeepney line AND the arrows
         await _updateMainRouteWithArrows(
           'main-route-source',
           'main-route-line-layer',
@@ -284,7 +273,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           hexColor,
         );
 
-        // Draw the Walking Paths (Start and End)
+        // Draw the Walking Paths
         final startWalkPoints =
             selectedRoute.actualWalkPathStart ??
             [startPin, points[selectedRoute.boardIndex]];
@@ -334,16 +323,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
   
   Future<void> _handleShowFloatingCard() async {
-    // 1. If it is already showing, slide it up out of view first
     if (_showFloatingCard) {
       setState(() { _showFloatingCard = false; });
       await Future.delayed(const Duration(milliseconds: 300));
     }
-    
-    // 2. Slide it down with the fresh data
+  
     setState(() { _showFloatingCard = true; });
   }
-  // --- NEW LOGIC: Load Custom Images into MapLibre ---
+  // --- Load Custom Images into MapLibre ---
   Future<void> _loadCustomPins() async {
     // Load Start Pin
     final ByteData startBytes = await rootBundle.load(
@@ -359,7 +346,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final Uint8List destList = destBytes.buffer.asUint8List();
     await maplibreController?.addImage('dest-icon', destList);
 
-    // --- NEW: Load the Directional Arrow ---
+    // --- Load the Directional Arrow ---
     final ByteData arrowBytes = await rootBundle.load(
       'assets/images/arrow.png',
     );
@@ -374,7 +361,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     List<LatLng> points,
     String hexColor,
   ) async {
-    // 1. Format the coordinates as a GeoJSON LineString
+    // Format the coordinates as a GeoJSON LineString
     Map<String, dynamic> geoJson = {
       "type": "FeatureCollection",
       "features": points.isEmpty
@@ -393,12 +380,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     };
 
     try {
-      // If the source exists, just update the data (Super fast!)
       await maplibreController?.setGeoJsonSource(sourceId, geoJson);
     } catch (e) {
-      // --- THE FIX ---
-      // If the source doesn't exist, and we are just passing an empty array to clear it,
-      // simply return. Do NOT create a ghost layer with a #000000 default color!
+      
       if (points.isEmpty) return;
 
       // If it fails, create the Source and both Layers once
@@ -419,13 +403,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         sourceId,
         symbolLayerId,
         maplibre.SymbolLayerProperties(
-          symbolPlacement: 'line', // <-- The Mapbox/MapLibre magic property
-          iconImage: 'route-arrow', // Matches the ID from _loadCustomPins
-          iconSize: 0.3, // Scale your PNG down or up here
-          iconKeepUpright:
-              false, // Ensures the arrow points along the line, not strictly up
-          symbolSpacing:
-              100, // Adds padding between repeating arrows so it isn't cluttered
+          symbolPlacement: 'line',
+          iconImage: 'route-arrow',
+          iconSize: 0.3,
+          iconKeepUpright: false,
+          symbolSpacing: 100,
         ),
       );
     }
@@ -441,11 +423,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     drawMapElements();
 
     if (sheetController.isAttached) {
-      double targetSize = 0.96; // Default height for Explore (0) and Search (2)
+      double targetSize = 0.96;
 
       if (_selectedIndex == 1) {
-        // If we are on Locate (1), check if we have routes!
-        // If yes, peek at 0.26. If no, hide completely at 0.0.
         targetSize = suggestedRoutes.isNotEmpty ? 0.26 : 0.0;
       }
 
@@ -457,25 +437,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  // --- NEW LOGIC: Check if current pin is a Favorite ---
+  // --- Check if current pin is a Favorite ---
   FavoriteLocation? _getCurrentFavorite(LatLng? currentDestPin) {
     if (currentDestPin == null) return null;
 
     final favorites = _hiveService.getFavorites();
 
     for (var fav in favorites) {
-      // Compare coordinates up to 4 decimal places to avoid micro-precision bugs
       if (fav.latitude.toStringAsFixed(4) ==
               currentDestPin.latitude.toStringAsFixed(4) &&
           fav.longitude.toStringAsFixed(4) ==
               currentDestPin.longitude.toStringAsFixed(4)) {
-        return fav; // Found a match!
+        return fav;
       }
     }
-    return null; // No match found
+    return null;
   }
 
-  // Temporarily placed here for the Find Button background math!
   Future<Polyline> parseRoute(String filePath, Color routeColor) async {
     final String response = await rootBundle.loadString(filePath);
     final data = await json.decode(response);
@@ -513,48 +491,37 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       backgroundColor: primaryColor,
       body: Stack(
         children: [
-          // Map Section: Displays The Map of Davao City Using MapLibre
           maplibre.MapLibreMap(
             // MapLibre natively takes the MapTiler style URL!
-            // styleString: 'https://api.maptiler.com/maps/streets-v4/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
-            styleString:
-                'https://api.maptiler.com/maps/019d2d1a-6040-7d1b-be05-18e6303d1ff8/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
+            styleString: 'https://api.maptiler.com/maps/019d2d1a-6040-7d1b-be05-18e6303d1ff8/style.json?key=${dotenv.env['MAPTILER_API_KEY']}',
 
-            // MapLibre has its own CameraPosition and LatLng classes, so we use our alias
             initialCameraPosition: const maplibre.CameraPosition(
-              // target: maplibre.LatLng(7.0700, 125.6000),
               target: maplibre.LatLng(7.0640, 125.6080),
               zoom: 14.0,
             ),
 
-            // Allow the user to rotate the map
             rotateGesturesEnabled: true,
 
             compassEnabled: true,
             compassViewMargins: const Point(16, 150),
 
-            // Grab the controller once the C++ engine is ready
             onMapCreated: (maplibre.MapLibreMapController controller) {
               maplibreController = controller;
             },
 
             onStyleLoadedCallback: () {
-              _loadCustomPins(); // Load our custom pin images into the GPU's memory
+              _loadCustomPins();
             },
 
-            // Tap handling for dropping pins (using MapLibre's math)
             onMapClick: (Point<double> point, maplibre.LatLng coordinates) {
-              // We convert MapLibre's LatLng back to our app's standard latlong2 format
               LatLng standardCoords = LatLng(
                 coordinates.latitude,
                 coordinates.longitude,
               );
 
               if (currentPinMode == PinMode.start) {
-                // Tell Riverpod to save the pin
                 ref.read(mapStateProvider.notifier).setStartPin(standardCoords);
 
-                // You still need setState for local UI variables!
                 setState(() {
                   currentPinMode = PinMode.none;
                   _clearRoutingData();
@@ -572,25 +539,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               }
               drawMapElements();
             },
-            // This code limits the app to Davao City only
-            // This prevents MapLibre to render parts of the map outside Davao City
             cameraTargetBounds: maplibre.CameraTargetBounds(
               maplibre.LatLngBounds(
-                southwest: maplibre.LatLng(
-                  6.9000,
-                  125.4000,
-                ), // Southwest corner of Davao City
-                northeast: maplibre.LatLng(
-                  7.2500,
-                  125.9000,
-                ), // Northeast corner of Davao City
+                southwest: maplibre.LatLng(6.9000, 125.4000,),
+                northeast: maplibre.LatLng(7.2500, 125.9000,), // Northeast corner of Davao City
               ),
             ),
 
-            minMaxZoomPreference: const maplibre.MinMaxZoomPreference(
-              11.0,
-              22.0,
-            ),
+            minMaxZoomPreference: const maplibre.MinMaxZoomPreference(11.0, 22.0,),
           ),
 
           SafeArea(
@@ -632,10 +588,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         }
                       } else {
                         setState(() {
-                          // Pre-fill the text field. If empty, keep it empty so the hint text shows.
                           _saveNameController.text = _currentDestinationName;
-                          _isSavePopupVisible =
-                              true; // Trigger the drop-down animation!
+                          _isSavePopupVisible = true;
                         });
                       }
                     },
@@ -660,50 +614,42 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 );
               }
 
-              // 3. THE FIX: Wait for the card to finish sliding off-screen
+              // Wait for the card to finish sliding off-screen
               await Future.delayed(const Duration(milliseconds: 300));
 
-              // 4. Safely clear the data and redraw the map
-              // The 'mounted' check is a best practice to ensure the screen still exists
+              // Safely clear the data and redraw the map
               if (mounted) {
                 ref.read(routeStateProvider.notifier).setSelectedRoute(null);
-                drawMapElements(); // Commands MapLibre to clear the jeepney line
+                drawMapElements();
               }
             },
           ),
 
-          // Dynamic Floating Buttons (Start & Target Pins on the Left, GPS & Find on the Right)
+          // Dynamic Floating Buttons
           AnimatedBuilder(
             animation: sheetController,
             builder: (context, child) {
-              // 1. Get the current size of the sheet safely
-              double currentSize = 0.18; // Default starting height
+              double currentSize = 0.18;
               if (sheetController.isAttached) {
                 currentSize = sheetController.size;
               }
 
-              // 2. THE CAP: Limit the size to 0.4 so the buttons stop moving up
               double cappedSize = currentSize > 0.4 ? 0.4 : currentSize;
 
-              // 3. THE MATH: Calculate the exact pixel height
               double screenHeight = MediaQuery.of(context).size.height;
-              // Add 16 pixels of padding so the buttons float nicely above the sheet's top edge
               double dynamicBottom = (screenHeight * cappedSize) + 16.0;
 
-              // 4. THE FLOOR: Prevent the buttons from crashing into the navigation bar
-              // When the sheet is at 0.0, the buttons must stay at 110
               if (dynamicBottom < 110.0) {
                 dynamicBottom = 110.0;
               }
 
-              // The master switch for the Find button
               bool canFind = startPin != null && destinationPin != null;
 
               return Positioned(
                 bottom: dynamicBottom,
                 left: 16,
                 right:
-                    16, // Stretching across the screen allows us to use MainAxisAlignment.spaceBetween
+                    16,
                 child: AnimatedOpacity(
                   opacity: _selectedIndex == 0 ? 0.0 : 1.0,
                   duration: const Duration(milliseconds: 300),
@@ -711,10 +657,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     ignoring: _selectedIndex == 0,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment
-                          .end, // Aligns bottoms of both sides
+                          .end,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // --- LEFT SIDE: Start & Target Buttons ---
+                        // --- LEFT SIDE ---
                         Row(
                           children: [
                             CustomPinButton(
@@ -725,19 +671,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                               pinData: startPin,
                               onTap: () {
                                 if (startPin != null) {
-                                  ref.read(mapStateProvider.notifier).setStartPin(null,); // Clear it in Riverpod
+                                  ref.read(mapStateProvider.notifier).setStartPin(null,);
                                   setState(() {
                                     enableGPS = false;
                                     currentPinMode = PinMode.none;
                                     _clearRoutingData();
                                   });
                                 } else if (currentPinMode == PinMode.start) {
-                                  // Action 2: Cancel selection
                                   setState(() {
                                     currentPinMode = PinMode.none;
                                   });
                                 } else {
-                                  // Action 1: Enter selection mode
                                   setState(() {
                                     if (currentPinMode == PinMode.start) {
                                       currentPinMode = PinMode.none;
@@ -770,7 +714,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                     currentPinMode = PinMode.none;
                                   });
                                 } else {
-                                  // THE FIX: Wrap the mode toggles in setState here too!
                                   setState(() {
                                     if (currentPinMode == PinMode.destination) {
                                       currentPinMode = PinMode.none;
@@ -785,7 +728,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           ],
                         ),
 
-                        // --- RIGHT SIDE: GPS & Find Buttons ---
+                        // --- RIGHT SIDE ---
                         Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -804,7 +747,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                       .read(mapStateProvider.notifier)
                                       .setStartPin(
                                         userLatLng,
-                                      ); // Save to Riverpod
+                                      );
                                   setState(() {
                                     enableGPS = true;
                                     _clearRoutingData();
@@ -823,7 +766,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   drawMapElements();
                                 }
                               },
-                              // Make sure enableGPS and fontColor are defined in your state
                               child: Icon(
                                 enableGPS ? Icons.gps_fixed : Icons.gps_off,
                                 color: fontColor,
@@ -836,16 +778,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   ? btnColor
                                   : disableColor,
                               onPressed: () async {
-                                // Check if pins are missing FIRST
                                 if (startPin == null || destinationPin == null) {
                                   Fluttertoast.showToast(
                                     msg: 'Please select Start and Target on the map.',
                                     backgroundColor: cardColor,
                                   );
-                                  return; // Stop the function here!
+                                  return;
                                 }
 
-                                // If we made it here, both pins exist. Proceed with routing!
                                 Map<String, List<LatLng>> routePayload = {};
 
                                 for (var route in allRoutes) {
@@ -865,7 +805,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   },
                                 );
 
-                                // Tell Riverpod about the results!
                                 ref.read(routeStateProvider.notifier).setSuggestedRoutes(bestRoutes);
 
                                 setState(() {
@@ -906,7 +845,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             },
           ),
           
-          // The Swipe-Up Bottom Sheet (Now modular!)
+          // The Swipe-Up Bottom Sheet
           MainBottomSheet(
             sheetController: sheetController,
             selectedIndex: _selectedIndex,
@@ -916,13 +855,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             onShowFloatingCard: _handleShowFloatingCard,
           ),
           
-          // --- NEW LAYER: The Animated Drop-Down Overlay ---
+          // --- The Animated Drop-Down Overlay ---
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut, // That premium bounce effect
+            curve: Curves.easeOut,
             top: _isSavePopupVisible
                 ? 120
-                : -300, // Slides from off-screen to just below the header
+                : -300,
             left: 16,
             right: 16,
             child: Card(
@@ -946,7 +885,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // The Name Input Field
                     TextField(
                       controller: _saveNameController,
                       style: const TextStyle(
@@ -980,7 +918,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             FocusManager.instance.primaryFocus?.unfocus();
                             setState(
                               () => _isSavePopupVisible = false,
-                            ); // Dismiss
+                            );
                           },
                           child: const Text(
                             'Cancel',
@@ -998,13 +936,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           ),
                           onPressed: () async {
                             FocusManager.instance.primaryFocus?.unfocus();
-                            // 1. Fallback name if they left it blank
                             final finalName =
                                 _saveNameController.text.trim().isEmpty
                                 ? 'Saved Location'
                                 : _saveNameController.text.trim();
 
-                            // 2. Create the Hive Object
                             final newFav = FavoriteLocation(
                               id: DateTime.now().millisecondsSinceEpoch
                                   .toString(),
@@ -1013,14 +949,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                               longitude: destinationPin.longitude,
                               iconCodePoint: Icons
                                   .star
-                                  .codePoint, // Default to a star icon
+                                  .codePoint,
                               isFavorite: true,
                             );
 
-                            // 3. Save to database
                             await _hiveService.saveLocation(newFav);
 
-                            // 4. Close the popup and notify user
                             setState(() {
                               _isSavePopupVisible = false;
                             });
