@@ -29,7 +29,7 @@ class CustomPinButton extends StatelessWidget {
 
     // Paste your SizedBox and ElevatedButton code here.
     // Use the variables passed in the constructor (label, imagePath, onTap) inside the button.
-    bool isSelecting = currentPinMode == mode;
+    bool isSelecting = currentMode == mode;
     bool isPlaced = pinData != null;
 
     Color bgColor = btnColor;

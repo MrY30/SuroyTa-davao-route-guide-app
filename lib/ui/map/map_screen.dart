@@ -733,7 +733,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   });
                                 } else if (currentPinMode == PinMode.start) {
                                   // Action 2: Cancel selection
-                                  currentPinMode = PinMode.none;
+                                  setState(() {
+                                    currentPinMode = PinMode.none;
+                                  });
                                 } else {
                                   // Action 1: Enter selection mode
                                   setState(() {
@@ -764,7 +766,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                     _clearRoutingData();
                                   });
                                 } else if (currentPinMode == PinMode.destination) {
-                                  currentPinMode = PinMode.none;
+                                  setState(() {
+                                    currentPinMode = PinMode.none;
+                                  });
                                 } else {
                                   // THE FIX: Wrap the mode toggles in setState here too!
                                   setState(() {
